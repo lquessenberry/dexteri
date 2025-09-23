@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Dexteri++
+GenericName=Web Scanner & Indexer
+Comment=All-in-one crawler, link checker, port/vuln scanner, and indexer
+Exec=dexteri-gui %U
+Icon=dexteri
+Terminal=false
+Categories=Network;Utility;Security;Development;
+Keywords=crawler;scanner;links;ports;security;seo;

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Minimal AppStream metadata for Dexteri++ -->
+<component type="desktop-application">
+  <id>com.dexteri.app</id>
+  <name>Dexteri++</name>
+  <summary>Website crawler, link checker, port and vuln scanner with report & exports</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>Dexteri++ is an all-in-one website scanner and reporter. It crawls pages, validates links, scans ports, performs basic vulnerability checks, and generates rich reports with multiple export formats.</p>
+  </description>
+  <categories>
+    <category>Network</category>
+    <category>Security</category>
+    <category>Utility</category>
+    <category>Development</category>
+  </categories>
+  <launchable type="desktop-id">Dexteri.desktop</launchable>
+  <provides>
+    <binary>dexteri</binary>
+    <binary>dexteri-gui</binary>
+  </provides>
+  <url type="homepage">https://example.com/dexteri</url>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0"/>
+  </releases>
+</component>

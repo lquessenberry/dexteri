@@ -1,0 +1,323 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dexteri++ (Desktop)</title>
+  <style>
+    :root{--bg:#0b1020;--panel:#0e1426;--card:#121a2d;--text:#E6EDF3;--muted:#9FB1C5;--accent:#6EE7B7;--blue:#93c5fd;--warn:#F59E0B;--err:#EF4444;--border:#1e2a47}
+    html,body{height:100%}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu;background:#0b1020;color:var(--text)}
+    .topbar{display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;background:linear-gradient(90deg,rgba(14,20,38,.85),rgba(14,20,38,.65));border-bottom:1px solid var(--border)}
+    .topbar h1{margin:0;font-size:1.05rem;letter-spacing:.3px}
+    .controls{display:grid;gap:.75rem;grid-template-columns:repeat(12,1fr);padding:1rem;border-bottom:1px solid var(--border);background:linear-gradient(90deg,rgba(16,24,42,.65),rgba(16,24,42,.35))}
+    .cell{display:flex;flex-direction:column;gap:.35rem}
+    label{font-size:.82rem;color:var(--muted)}
+    input[type=text],input[type=number]{width:100%;padding:.55rem .65rem;border-radius:8px;border:1px solid var(--border);background:#0a1020;color:var(--text)}
+    input[type=checkbox]{transform:scale(1.05)}
+    button,.btn{background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#05210d;padding:.6rem .85rem;border-radius:10px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem}
+    .btn.secondary{background:linear-gradient(135deg,#60a5fa,#3b82f6);color:#05152b}
+    .status{display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;padding:1rem;background:linear-gradient(90deg,rgba(10,16,32,.35),rgba(10,16,32,.15))}
+    .kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:.8rem}
+    .kpi b{display:block;color:var(--muted);font-weight:600}
+    .kpi .v{font-size:1.35rem;margin-top:.25rem;color:#cfe6ff}
+    .tabs{display:flex;gap:.5rem;padding:.6rem 1rem;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:linear-gradient(90deg,rgba(10,16,32,.45),rgba(10,16,32,.25))}
+    .tab{padding:.45rem .8rem;border:1px solid var(--border);border-radius:999px;background:#0f1526;color:#b9d5f3;cursor:pointer}
+    .tab.active{background:linear-gradient(135deg,#6EE7B7,#93c5fd);color:#05152b;border-color:transparent}
+    .table-wrap{width:100vw;overflow:auto;padding:1rem}
+    table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+    thead th{position:sticky;top:0;background:#0f172a;border-bottom:1px solid var(--border);z-index:1;user-select:none}
+    th,td{padding:.5rem .6rem;border-right:1px solid var(--border)}
+    th:last-child,td:last-child{border-right:none}
+    tbody tr:nth-child(even){background:rgba(255,255,255,.02)}
+    .trunc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .wrap td{white-space:normal;word-break:break-word}
+    .filter-row input{width:100%;padding:.35rem .45rem;border-radius:6px;border:1px solid var(--border);background:#0a1020;color:var(--text)}
+    .resizer{position:absolute;right:0;top:0;height:100%;width:5px;cursor:col-resize}
+    th{position:relative}
+    .row-actions{display:flex;gap:.4rem}
+    .muted{color:var(--muted)}
+    .err{color:var(--err)}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>Dexteri++</h1>
+    <span style="flex:1"></span>
+    <span id="phase" class="muted">idle</span>
+  </div>
+
+  <form id="f" class="controls">
+    <div class="cell" style="grid-column:span 3"><label>URL</label><input id="url" type="text" placeholder="https://example.com" required></div>
+    <div class="cell" style="grid-column:span 2"><label>Host (optional)</label><input id="host" type="text" placeholder="example.com"></div>
+    <div class="cell"><label>Depth</label><input id="depth" type="number" min="0" value="2"></div>
+    <div class="cell"><label>HTTP Concurrency</label><input id="concurrency" type="number" min="1" value="32"></div>
+    <div class="cell" style="grid-column:span 2"><label>Port Spec</label><input id="ports" type="text" placeholder="1-1024,3306,5432"></div>
+    <div class="cell"><label>Port Concurrency</label><input id="port_concurrency" type="number" min="1" value="512"></div>
+    <div class="cell"><label>Port Timeout (ms)</label><input id="timeout_ms" type="number" min="100" value="800"></div>
+    <div class="cell" style="display:flex;align-items:center;gap:.5rem"><input id="externals" type="checkbox"><label style="margin:0">Validate external links</label></div>
+    <div class="cell" style="display:flex;align-items:flex-end"><button id="run" type="submit">Run All</button></div>
+    <div class="cell" style="grid-column:span 12"><span id="error" class="err"></span></div>
+  </form>
+
+  <div class="status">
+    <div class="kpi"><b>Pages</b><div class="v" id="k_pages">0</div></div>
+    <div class="kpi"><b>Links Checked</b><div class="v" id="k_links">0</div></div>
+    <div class="kpi"><b>Broken</b><div class="v" id="k_broken">0</div></div>
+    <div class="kpi"><b>Ports Open</b><div class="v" id="k_open">0</div></div>
+    <div class="kpi"><b>Findings</b><div class="v" id="k_findings">0</div></div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-view="pages">Pages</div>
+    <div class="tab" data-view="broken">Broken Links</div>
+    <div class="tab" data-view="ports">Ports</div>
+    <div class="tab" data-view="findings">Findings</div>
+    <span style="flex:1"></span>
+    <button class="btn secondary" id="exportJson" type="button">Export JSON</button>
+    <button class="btn secondary" id="exportXml" type="button">Export XML</button>
+    <button class="btn secondary" id="exportHtml" type="button">Export HTML</button>
+    <button class="btn secondary" id="exportCsv" type="button" title="Exports current tab">Export CSV</button>
+  </div>
+
+  <div class="table-wrap" id="tableHost">
+    <table id="dataTable">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.tauri;
+    let pollHandle = null;
+    let currentView = 'pages';
+    let cachedResults = null;
+    let isRunning = false;
+
+    function saveParams(){
+      const params = {
+        url: document.getElementById('url').value,
+        host: document.getElementById('host').value,
+        depth: document.getElementById('depth').value,
+        concurrency: document.getElementById('concurrency').value,
+        ports: document.getElementById('ports').value,
+        port_concurrency: document.getElementById('port_concurrency').value,
+        timeout_ms: document.getElementById('timeout_ms').value,
+        externals: document.getElementById('externals').checked,
+      };
+      localStorage.setItem('dexteri:params', JSON.stringify(params));
+    }
+    function loadParams(){
+      try{
+        const p = JSON.parse(localStorage.getItem('dexteri:params')||'{}');
+        if(p.url) document.getElementById('url').value = p.url;
+        if(p.host) document.getElementById('host').value = p.host;
+        if(p.depth) document.getElementById('depth').value = p.depth;
+        if(p.concurrency) document.getElementById('concurrency').value = p.concurrency;
+        if(p.ports) document.getElementById('ports').value = p.ports;
+        if(p.port_concurrency) document.getElementById('port_concurrency').value = p.port_concurrency;
+        if(p.timeout_ms) document.getElementById('timeout_ms').value = p.timeout_ms;
+        if(typeof p.externals==='boolean') document.getElementById('externals').checked = p.externals;
+      }catch(e){ console.warn('loadParams', e); }
+    }
+
+    function v(id){ const el=document.getElementById(id); if(!el) return undefined; const x=(el.value||'').trim(); return x||undefined; }
+    function num(id){ const el=document.getElementById(id); if(!el) return undefined; const n=parseInt(el.value,10); return Number.isFinite(n)?n:undefined; }
+
+    async function runAll(ev){
+      ev.preventDefault();
+      document.getElementById('error').textContent='';
+      saveParams();
+      if(isRunning) return;
+      const payload={
+        url: document.getElementById('url').value.trim(),
+        host: v('host'), depth: num('depth'), concurrency: num('concurrency'),
+        externals: document.getElementById('externals').checked,
+        ports: v('ports'), port_concurrency: num('port_concurrency'), timeout_ms: num('timeout_ms')
+      };
+      try{
+        await invoke('run_all', { params: payload });
+        isRunning = true;
+        document.getElementById('phase').textContent='starting';
+        if(pollHandle) clearInterval(pollHandle);
+        pollHandle = setInterval(poll, 1000);
+      }catch(e){ document.getElementById('error').textContent = String(e); }
+    }
+
+    async function poll(){
+      try{
+        const st = await invoke('get_status');
+        if(!st) return;
+        document.getElementById('phase').textContent = st.phase || 'idle';
+        document.getElementById('k_pages').textContent = st.pages_crawled;
+        document.getElementById('k_links').textContent = st.links_checked;
+        document.getElementById('k_broken').textContent = st.broken_links;
+        document.getElementById('k_open').textContent = st.ports_open;
+        document.getElementById('k_findings').textContent = st.vuln_findings;
+        if(st.done){ clearInterval(pollHandle); isRunning = false; await loadResults(); }
+      }catch(e){ console.error(e); }
+    }
+
+    async function loadResults(){
+      try{
+        cachedResults = await invoke('get_results');
+        renderTable();
+      }catch(e){ console.error(e); }
+    }
+
+    function buildHeaders(cols){
+      const thead = document.querySelector('#dataTable thead');
+      thead.innerHTML = '';
+      const tr = document.createElement('tr');
+      cols.forEach(c => {
+        const th = document.createElement('th'); th.textContent = c.label; th.dataset.key = c.key; th.style.width = c.width || '';
+        th.addEventListener('click', () => sortBy(c.key));
+        const rz = document.createElement('div'); rz.className='resizer'; th.appendChild(rz);
+        enableResize(th, rz);
+        tr.appendChild(th);
+      });
+      thead.appendChild(tr);
+      // filter row
+      const fr = document.createElement('tr'); fr.className='filter-row';
+      cols.forEach(c => {
+        const th = document.createElement('th');
+        const inp = document.createElement('input');
+        inp.placeholder = 'Filter ' + c.label;
+        inp.dataset.key = c.key;
+        inp.addEventListener('input', applyFilters);
+        th.appendChild(inp); fr.appendChild(th);
+      });
+      thead.appendChild(fr);
+    }
+
+    let sortState = { key: null, asc: true };
+    function sortBy(key){
+      if(sortState.key === key){ sortState.asc = !sortState.asc; } else { sortState.key = key; sortState.asc = true; }
+      renderTable();
+    }
+
+    function applyFilters(){ renderTable(); }
+
+    function passesFilters(obj, cols){
+      const inputs = [...document.querySelectorAll('.filter-row input')];
+      for(const inp of inputs){
+        const key = inp.dataset.key; const q = (inp.value||'').toLowerCase();
+        if(!q) continue; const val = (obj[key] ?? '').toString().toLowerCase();
+        if(!val.includes(q)) return false;
+      }
+      return true;
+    }
+
+    function enableResize(th, handle){
+      let startX=0, startW=0; handle.addEventListener('mousedown', e=>{
+        startX=e.pageX; startW=th.offsetWidth; document.body.style.cursor='col-resize';
+        function mm(ev){ const dx=ev.pageX-startX; th.style.width = Math.max(60,startW+dx)+'px'; }
+        function mu(){ document.removeEventListener('mousemove',mm); document.removeEventListener('mouseup',mu); document.body.style.cursor=''; }
+        document.addEventListener('mousemove',mm); document.addEventListener('mouseup',mu);
+      });
+    }
+
+    async function openUrl(u){ try { await invoke('open_in_browser', { url: u }); } catch(e){ console.error(e); } }
+    async function copyText(t){ try{ await navigator.clipboard.writeText(t); }catch(e){ console.error(e); } }
+
+    function renderTable(){
+      const table = document.getElementById('dataTable');
+      const tbody = table.querySelector('tbody'); tbody.innerHTML = '';
+      if(!cachedResults) return;
+      if(currentView==='pages'){
+        const cols = [
+          {key:'i', label:'#', width:'50px'},
+          {key:'url', label:'URL', width:'40%'},
+          {key:'status', label:'Status', width:'80px'},
+          {key:'title', label:'Title', width:'25%'},
+          {key:'content_type', label:'Content-Type', width:'15%'},
+          {key:'bytes', label:'Bytes', width:'100px'},
+          {key:'actions', label:'', width:'120px'}
+        ];
+        buildHeaders(cols);
+        let rows = cachedResults.crawl.pages.map((p,i)=>({i:i+1,url:p.url,status:p.status||'',title:p.title||'',content_type:p.content_type||'',bytes:p.bytes||''}));
+        rows = rows.filter(r=>passesFilters(r, cols));
+        if(sortState.key){ const k=sortState.key; rows.sort((a,b)=>(''+a[k]).localeCompare(''+b[k], undefined, {numeric:true})); if(!sortState.asc) rows.reverse(); }
+        for(const r of rows){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${r.i}</td>
+            <td class="trunc" title="${esc(r.url)}"><a href="#" data-url="${esc(r.url)}">${esc(r.url)}</a></td>
+            <td>${r.status}</td>
+            <td class="trunc" title="${esc(r.title)}">${esc(r.title)}</td>
+            <td class="trunc" title="${esc(r.content_type)}">${esc(r.content_type)}</td>
+            <td>${r.bytes}</td>
+            <td class="row-actions"><button class="btn" data-copy="${esc(r.url)}">Copy</button></td>
+          `;
+          tbody.appendChild(tr);
+        }
+      } else if(currentView==='broken'){
+        const cols = [
+          {key:'i',label:'#',width:'50px'},{key:'url',label:'URL',width:'40%'},{key:'status',label:'Status',width:'80px'},{key:'reason',label:'Reason',width:'30%'},{key:'parent',label:'Parent',width:'30%'},{key:'external',label:'Ext',width:'60px'}
+        ];
+        buildHeaders(cols);
+        let rows = cachedResults.crawl.broken_links.map((b,i)=>({i:i+1,url:b.url,status:b.status||'',reason:b.reason,parent:b.parent,external:b.external}));
+        rows = rows.filter(r=>passesFilters(r, cols));
+        if(sortState.key){ const k=sortState.key; rows.sort((a,b)=>(''+a[k]).localeCompare(''+b[k], undefined, {numeric:true})); if(!sortState.asc) rows.reverse(); }
+        for(const r of rows){
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${r.i}</td>
+            <td class="trunc" title="${esc(r.url)}"><a href="#" data-url="${esc(r.url)}">${esc(r.url)}</a></td>
+            <td>${r.status}</td>
+            <td class="trunc" title="${esc(r.reason)}">${esc(r.reason)}</td>
+            <td class="trunc" title="${esc(r.parent)}">${esc(r.parent)}</td>
+            <td>${r.external}</td>
+          `;
+          tbody.appendChild(tr);
+        }
+      } else if(currentView==='ports'){
+        const cols = [ {key:'i', label:'#', width:'50px'}, {key:'port', label:'Open Port', width:'120px'} ];
+        buildHeaders(cols);
+        let rows = cachedResults.ports.open_ports.map((p,i)=>({i:i+1, port:p}));
+        rows = rows.filter(r=>passesFilters(r, cols));
+        if(sortState.key){ const k=sortState.key; rows.sort((a,b)=>(a[k]-b[k])); if(!sortState.asc) rows.reverse(); }
+        for(const r of rows){ const tr=document.createElement('tr'); tr.innerHTML = `<td>${r.i}</td><td>${r.port}</td>`; tbody.appendChild(tr); }
+      } else if(currentView==='findings'){
+        const cols = [ {key:'i',label:'#',width:'50px'},{key:'severity',label:'Severity',width:'120px'},{key:'title',label:'Title',width:'30%'},{key:'description',label:'Description',width:'40%'},{key:'url',label:'URL',width:'20%'} ];
+        buildHeaders(cols);
+        let rows = cachedResults.vuln.findings.map((f,i)=>({i:i+1,severity:f.severity,title:f.title,description:f.description,url:f.url||''}));
+        rows = rows.filter(r=>passesFilters(r, cols));
+        if(sortState.key){ const k=sortState.key; rows.sort((a,b)=>(''+a[k]).localeCompare(''+b[k], undefined, {numeric:true})); if(!sortState.asc) rows.reverse(); }
+        for(const r of rows){ const tr=document.createElement('tr'); tr.innerHTML = `<td>${r.i}</td><td>${esc(r.severity)}</td><td class="trunc" title="${esc(r.title)}">${esc(r.title)}</td><td class="trunc" title="${esc(r.description)}">${esc(r.description)}</td><td class="trunc" title="${esc(r.url)}"><a href="#" data-url="${esc(r.url)}">${esc(r.url)}</a></td>`; tbody.appendChild(tr); }
+      }
+      // actions
+      tbody.querySelectorAll('a[data-url]').forEach(a=>a.addEventListener('click', (e)=>{ e.preventDefault(); const u=a.dataset.url||''; const url = u.match(/^https?:\/\//)?u:`http://${u}`; openUrl(url); }));
+      tbody.querySelectorAll('button[data-copy]').forEach(b=>b.addEventListener('click', ()=>copyText(b.dataset.copy||'')));
+    }
+
+    function esc(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    function setTab(v){ currentView = v; document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.view===v)); renderTable(); }
+
+    async function exportKind(kind){
+      try{
+        const [name,mime,content] = await invoke('export_data', { format: 'csv', kind });
+        download(name, mime, content);
+      }catch(e){ console.error(e); }
+    }
+
+    function download(name, mime, content){
+      const blob = new Blob([content], {type: mime}); const url = URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download=name; a.click(); URL.revokeObjectURL(url);
+    }
+
+    document.getElementById('f').addEventListener('submit', runAll);
+    document.getElementById('exportJson').addEventListener('click', async ()=>{ try{ const [n,m,c]=await invoke('export_data',{format:'json'}); download(n,m,c);}catch(e){console.error(e);} });
+    document.getElementById('exportXml').addEventListener('click', async ()=>{ try{ const [n,m,c]=await invoke('export_data',{format:'xml'}); download(n,m,c);}catch(e){console.error(e);} });
+    document.getElementById('exportHtml').addEventListener('click', async ()=>{ try{ const [n,m,c]=await invoke('export_data',{format:'html'}); download(n,m,c);}catch(e){console.error(e);} });
+    document.getElementById('exportCsv').addEventListener('click', ()=>{
+      const m = {pages:'pages', broken:'broken_links', ports:'ports', findings:'findings'}; exportKind(m[currentView]||'pages');
+    });
+    document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>setTab(t.dataset.view)));
+
+    loadParams();
+    (async()=>{ try{ const r = await invoke('get_results'); if(r){ cachedResults=r; renderTable(); } }catch(e){} })();
+  </script>
+</body>
+</html>

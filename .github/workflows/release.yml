@@ -1,0 +1,73 @@
+name: build-and-release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch: {}
+
+jobs:
+  linux:
+    name: Linux x86_64 (CLI + AppImage)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: dexteri
+
+      - name: Install system dependencies (WebKitGTK, GTK3, libsoup, etc)
+        run: |
+          sudo apt-get update
+          chmod +x scripts/install-tauri-deps.sh
+          ./scripts/install-tauri-deps.sh
+
+      - name: Build (release)
+        run: |
+          cargo build --release --bin dexteri --bin dexteri-gui
+
+      - name: Package AppImage
+        run: |
+          chmod +x packaging/appimage/build_appimage.sh
+          ./packaging/appimage/build_appimage.sh
+
+      - name: Generate checksums
+        run: |
+          cd target/release
+          sha256sum dexteri > dexteri.sha256
+          sha256sum dexteri-gui > dexteri-gui.sha256
+          cd -
+          cd packaging/appimage
+          sha256sum Dexteri-x86_64.AppImage > Dexteri-x86_64.AppImage.sha256
+          cd -
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dexteri-linux-x86_64
+          path: |
+            target/release/dexteri
+            target/release/dexteri-gui
+            target/release/dexteri.sha256
+            target/release/dexteri-gui.sha256
+            packaging/appimage/Dexteri-x86_64.AppImage
+            packaging/appimage/Dexteri-x86_64.AppImage.sha256
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/release/dexteri
+            target/release/dexteri-gui
+            target/release/dexteri.sha256
+            target/release/dexteri-gui.sha256
+            packaging/appimage/Dexteri-x86_64.AppImage
+            packaging/appimage/Dexteri-x86_64.AppImage.sha256
+          generate_release_notes: true

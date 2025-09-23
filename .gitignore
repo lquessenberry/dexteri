@@ -1,0 +1,22 @@
+# Rust
+/target/
+Cargo.lock
+
+# Tauri build artifacts (if any)
+/.cargo/
+
+# AppImage build outputs
+packaging/appimage/Dexteri-x86_64.AppImage
+packaging/appimage/Dexteri.AppDir/
+packaging/appimage/appimagetool-x86_64.AppImage
+
+# Generated reports
+/report.html
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

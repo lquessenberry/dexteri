@@ -1,0 +1,47 @@
+[package]
+name = "dexteri"
+version = "0.1.0"
+edition = "2021"
+description = "Dexteri++: All-in-one website crawler, link checker, port/vulnerability scanner, and indexer. Donationware."
+license = "MIT"
+repository = "https://example.com/dexteri"
+authors = ["Dexteri++ Team <devnull@example.com>"]
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "z"
+
+[dependencies]
+anyhow = "1.0"
+thiserror = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+reqwest = { version = "0.12", features = ["rustls-tls", "gzip", "brotli", "zstd", "json", "cookies"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time"] }
+scraper = "0.19"
+url = "2.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+regex = "1.10"
+chrono = { version = "0.4" }
+html2text = "0.11"
+html-escape = "0.2"
+# Tantivy for full-text indexing
+ tantivy = "0.22"
+ futures = "0.3"
+ # Web dashboard
+ axum = { version = "0.7" }
+ tower-http = { version = "0.6", features = ["fs", "trace"] }
+ # Desktop GUI (Tauri)
+ tauri = { version = "1", features = ["api-all"] }
+
+[build-dependencies]
+tauri-build = { version = "1" }
+
+[[bin]]
+name = "dexteri-gui"
+path = "src/gui.rs"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+ predicates = "3.1"
