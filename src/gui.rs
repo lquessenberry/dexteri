@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{Manager, State};
 use tokio::sync::RwLock;
 use url::Url;
+use chrono::Local;
 
 use dexteri::{crawler, models::*, ports, report, util, vuln};
 
@@ -17,12 +18,26 @@ fn open_in_browser(app: tauri::AppHandle, url: String) -> Result<(), String> {
     tauri::api::shell::open(&app.shell_scope(), url, None).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn get_logs(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let inner = state.inner.read().await;
+    Ok(inner.logs.clone())
+}
+
+#[tauri::command]
+async fn clear_logs(state: State<'_, AppState>) -> Result<(), String> {
+    let mut inner = state.inner.write().await;
+    inner.logs.clear();
+    Ok(())
+}
+
 #[derive(Default)]
 struct InnerState {
     running: bool,
     status: Option<RunStatus>,
     last_results: Option<CombinedResult>,
     last_report_html: Option<String>,
+    logs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -82,6 +97,12 @@ async fn run_all(params: RunAllParams, state: State<'_, AppState>) -> Result<(),
             phase: "starting".into(),
             done: false,
         });
+        inner.logs.clear();
+        let (h, d, ex) = {
+            let st = inner.status.as_ref().unwrap();
+            (st.host.clone(), st.depth, st.externals)
+        };
+        push_log(&mut inner, &format!("Starting run: url={} host={} depth={} externals={}", params.url, h, d, ex));
     }
 
     let state_arc = state.inner.clone();
@@ -93,6 +114,7 @@ async fn run_all(params: RunAllParams, state: State<'_, AppState>) -> Result<(),
                 st.phase = format!("error: {}", e);
                 st.done = true;
             }
+            push_log(&mut inner, &format!("Error: {}", e));
             inner.running = false;
         }
     });
@@ -190,6 +212,7 @@ async fn run_pipeline(state: Arc<RwLock<InnerState>>, params: RunAllParams) -> a
     {
         let mut inner = state.write().await;
         if let Some(st) = inner.status.as_mut() { st.phase = "crawl".into(); }
+        push_log(&mut inner, &format!("Phase: crawl (depth={}, concurrency={}, externals={})", depth, concurrency, externals));
     }
     let crawl_res = crawler::crawl(&client, &start_url, depth, concurrency, externals).await?;
     {
@@ -199,12 +222,15 @@ async fn run_pipeline(state: Arc<RwLock<InnerState>>, params: RunAllParams) -> a
             st.links_checked = crawl_res.links_checked;
             st.broken_links = crawl_res.broken_links.len();
         }
+        push_log(&mut inner, &format!("Crawl complete: pages={} links={} broken={}", 
+            crawl_res.pages_crawled, crawl_res.links_checked, crawl_res.broken_links.len()));
     }
 
     // Ports
     {
         let mut inner = state.write().await;
         if let Some(st) = inner.status.as_mut() { st.phase = "ports".into(); }
+        push_log(&mut inner, &format!("Phase: ports (targets={} ports, concurrency={}, timeout_ms={})", ports_vec.len(), port_concurrency, timeout_ms));
     }
     let ports_res = ports::scan_host(&host, &ports_vec, port_concurrency, timeout_ms).await?;
     {
@@ -213,17 +239,20 @@ async fn run_pipeline(state: Arc<RwLock<InnerState>>, params: RunAllParams) -> a
             st.ports_scanned = ports_res.scanned;
             st.ports_open = ports_res.open_ports.len();
         }
+        push_log(&mut inner, &format!("Ports complete: scanned={} open={}", ports_res.scanned, ports_res.open_ports.len()));
     }
 
     // Vuln
     {
         let mut inner = state.write().await;
         if let Some(st) = inner.status.as_mut() { st.phase = "vuln".into(); }
+        push_log(&mut inner, "Phase: vuln");
     }
     let vuln_res = vuln::scan(&client, &start_url).await?;
     {
         let mut inner = state.write().await;
         if let Some(st) = inner.status.as_mut() { st.vuln_findings = vuln_res.findings.len(); }
+        push_log(&mut inner, &format!("Vuln complete: findings={}", vuln_res.findings.len()));
     }
 
     // Report
@@ -236,16 +265,22 @@ async fn run_pipeline(state: Arc<RwLock<InnerState>>, params: RunAllParams) -> a
         inner.last_report_html = Some(html);
         inner.last_results = Some(CombinedResult { crawl: crawl_res, ports: ports_res, vuln: vuln_res });
         if let Some(st) = inner.status.as_mut() { st.phase = "done".into(); st.done = true; }
+        push_log(&mut inner, "Done");
         inner.running = false;
     }
 
     Ok(())
 }
 
+fn push_log(inner: &mut InnerState, line: &str) {
+    let t = Local::now().format("%H:%M:%S");
+    inner.logs.push(format!("[{}] {}", t, line));
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![run_all, get_status, get_results, get_report_html, export_data, open_in_browser])
+        .invoke_handler(tauri::generate_handler![run_all, get_status, get_results, get_report_html, export_data, open_in_browser, get_logs, clear_logs])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

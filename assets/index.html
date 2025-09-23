@@ -38,6 +38,15 @@
     .row-actions{display:flex;gap:.4rem}
     .muted{color:var(--muted)}
     .err{color:var(--err)}
+    .runline{display:flex;align-items:center;gap:.5rem;padding:.5rem 1rem;border-bottom:1px solid var(--border);background:linear-gradient(90deg,rgba(10,16,32,.25),rgba(10,16,32,.05))}
+    .dot{width:10px;height:10px;border-radius:50%;background:#64748b}
+    .dot.running{background:var(--accent);box-shadow:0 0 0 0 rgba(110,231,183,0.7);animation:pulse 1.5s infinite}
+    @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(110,231,183,0.7)}70%{box-shadow:0 0 0 10px rgba(110,231,183,0)}100%{box-shadow:0 0 0 0 rgba(110,231,183,0)}}
+    .progress{height:6px;background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+    .bar{height:100%;width:30%;background:linear-gradient(90deg,#60a5fa,#06b6d4);animation:indet 1.2s infinite ease-in-out}
+    @keyframes indet{0%{margin-left:-30%}50%{margin-left:70%}100%{margin-left:-30%}}
+    .logs{padding:0 1rem 1rem 1rem}
+    .logs pre{background:#0a1020;border:1px solid var(--border);border-radius:10px;padding:.75rem;max-height:240px;overflow:auto;color:#cbd5e1}
   </style>
 </head>
 <body>
@@ -46,6 +55,14 @@
     <span style="flex:1"></span>
     <span id="phase" class="muted">idle</span>
   </div>
+
+  <div class="runline">
+    <div id="runDot" class="dot"></div>
+    <div id="runText" class="muted">Not running</div>
+    <span style="flex:1"></span>
+    <div id="lastUpdate" class="muted" style="font-size:.85rem"></div>
+  </div>
+  <div class="progress" id="progress" style="display:none"><div class="bar"></div></div>
 
   <form id="f" class="controls">
     <div class="cell" style="grid-column:span 3"><label>URL</label><input id="url" type="text" placeholder="https://example.com" required></div>
@@ -88,11 +105,22 @@
   </div>
 
   <script>
-    const { invoke } = window.__TAURI__.tauri;
+    async function invoke(cmd, args){
+      const get = ()=> window.__TAURI__ && (window.__TAURI__.invoke || (window.__TAURI__.tauri && window.__TAURI__.tauri.invoke));
+      let inv = get();
+      if(!inv){ for(let i=0;i<30 && !inv;i++){ await new Promise(r=>setTimeout(r,100)); inv = get(); } }
+      if(!inv){ throw new Error('Tauri API not loaded'); }
+      return inv(cmd, args);
+    }
     let pollHandle = null;
     let currentView = 'pages';
     let cachedResults = null;
     let isRunning = false;
+    const runBtn = () => document.getElementById('run');
+    const runDot = () => document.getElementById('runDot');
+    const runText = () => document.getElementById('runText');
+    const progress = () => document.getElementById('progress');
+    const lastUpdate = () => document.getElementById('lastUpdate');
 
     function saveParams(){
       const params = {
@@ -129,6 +157,7 @@
       document.getElementById('error').textContent='';
       saveParams();
       if(isRunning) return;
+      try{ await invoke('clear_logs'); }catch(e){}
       const payload={
         url: document.getElementById('url').value.trim(),
         host: v('host'), depth: num('depth'), concurrency: num('concurrency'),
@@ -139,6 +168,8 @@
         await invoke('run_all', { params: payload });
         isRunning = true;
         document.getElementById('phase').textContent='starting';
+        runBtn().disabled = true; runBtn().textContent = 'Running...';
+        runDot().classList.add('running'); runText().textContent = 'Running'; progress().style.display='block';
         if(pollHandle) clearInterval(pollHandle);
         pollHandle = setInterval(poll, 1000);
       }catch(e){ document.getElementById('error').textContent = String(e); }
@@ -148,13 +179,30 @@
       try{
         const st = await invoke('get_status');
         if(!st) return;
-        document.getElementById('phase').textContent = st.phase || 'idle';
+        const ph = st.phase || 'idle';
+        document.getElementById('phase').textContent = ph;
+        if((ph||'').startsWith('error:')){
+          document.getElementById('error').textContent = ph;
+        }
         document.getElementById('k_pages').textContent = st.pages_crawled;
         document.getElementById('k_links').textContent = st.links_checked;
         document.getElementById('k_broken').textContent = st.broken_links;
         document.getElementById('k_open').textContent = st.ports_open;
         document.getElementById('k_findings').textContent = st.vuln_findings;
-        if(st.done){ clearInterval(pollHandle); isRunning = false; await loadResults(); }
+        runText().textContent = st.done ? 'Idle' : `Running: ${st.phase}`;
+        runDot().classList.toggle('running', !st.done);
+        progress().style.display = st.done ? 'none' : 'block';
+        lastUpdate().textContent = new Date().toLocaleTimeString();
+        await renderLogs();
+        if(st.done){
+          clearInterval(pollHandle);
+          isRunning = false;
+          await loadResults();
+          try{ runBtn().disabled = false; runBtn().textContent = 'Run All'; }catch(e){}
+          runDot().classList.remove('running');
+          runText().textContent = 'Idle';
+          progress().style.display = 'none';
+        }
       }catch(e){ console.error(e); }
     }
 
@@ -219,6 +267,17 @@
 
     async function openUrl(u){ try { await invoke('open_in_browser', { url: u }); } catch(e){ console.error(e); } }
     async function copyText(t){ try{ await navigator.clipboard.writeText(t); }catch(e){ console.error(e); } }
+
+    async function renderLogs(){
+      try{
+        const lines = await invoke('get_logs');
+        const pre = document.getElementById('logPre');
+        if(!pre) return;
+        const autoScroll = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
+        pre.textContent = (lines||[]).slice(-500).join('\n');
+        if(autoScroll) pre.scrollTop = pre.scrollHeight;
+      }catch(e){ /* no-op */ }
+    }
 
     function renderTable(){
       const table = document.getElementById('dataTable');
@@ -319,5 +378,10 @@
     loadParams();
     (async()=>{ try{ const r = await invoke('get_results'); if(r){ cachedResults=r; renderTable(); } }catch(e){} })();
   </script>
+
+  <div class="logs">
+    <b class="muted">Logs</b>
+    <pre id="logPre"></pre>
+  </div>
 </body>
 </html>

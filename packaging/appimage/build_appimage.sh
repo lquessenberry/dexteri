@@ -38,10 +38,10 @@ if [ -f tauri.conf.json ]; then
   mkdir -p "$APPDIR/usr/share/dexteri"
   install -m 0644 tauri.conf.json "$APPDIR/usr/share/dexteri/tauri.conf.json"
 fi
-# AppStream metadata
+# AppStream metadata (install with name matching component id)
 if [ -f packaging/appimage/Dexteri.appdata.xml ]; then
   mkdir -p "$APPDIR/usr/share/metainfo"
-  install -m 0644 packaging/appimage/Dexteri.appdata.xml "$APPDIR/usr/share/metainfo/Dexteri.appdata.xml"
+  install -m 0644 packaging/appimage/Dexteri.appdata.xml "$APPDIR/usr/share/metainfo/com.dexteri.app.metainfo.xml"
 fi
 # icons
 if [ -f "$ICON_SRC_SVG" ]; then
