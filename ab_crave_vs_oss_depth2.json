@@ -1,0 +1,162 @@
+{
+  "a": {
+    "pages": 1,
+    "links": 73,
+    "broken": 0,
+    "start": "https://cravemedia.io/"
+  },
+  "b": {
+    "pages": 52,
+    "links": 271,
+    "broken": 109,
+    "start": "https://onesimplespark.com/"
+  },
+  "diff": {
+    "a": {
+      "json_ld_blocks": 1,
+      "microdata_items": 0,
+      "og_tags": 5,
+      "twitter_tags": 1,
+      "robots_pages": 1,
+      "canonical_pages": 1,
+      "hreflang_total": 0,
+      "tracker_counts": {},
+      "hubspot": 0,
+      "pardot": 0,
+      "marketo": 0,
+      "salesforce": 0,
+      "segment": 0,
+      "intercom": 0,
+      "pages_crawled": 1,
+      "links_checked": 73,
+      "broken_links": 0
+    },
+    "b": {
+      "json_ld_blocks": 4,
+      "microdata_items": 5,
+      "og_tags": 40,
+      "twitter_tags": 10,
+      "robots_pages": 4,
+      "canonical_pages": 4,
+      "hreflang_total": 0,
+      "tracker_counts": {
+        "Google Analytics (gtag)": 4,
+        "Google Tag Manager": 4,
+        "GTM dataLayer": 4
+      },
+      "hubspot": 0,
+      "pardot": 0,
+      "marketo": 0,
+      "salesforce": 0,
+      "segment": 0,
+      "intercom": 0,
+      "pages_crawled": 52,
+      "links_checked": 271,
+      "broken_links": 109
+    },
+    "diff": {
+      "url_only_in_a": [
+        "https://cravemedia.io/"
+      ],
+      "url_only_in_b": [
+        "https://onesimplespark.com/",
+        "https://onesimplespark.com/?p=3807",
+        "https://onesimplespark.com/?p=3888",
+        "https://onesimplespark.com/?p=3906",
+        "https://onesimplespark.com/comments/feed/",
+        "https://onesimplespark.com/contact",
+        "https://onesimplespark.com/contact/",
+        "https://onesimplespark.com/content-production/",
+        "https://onesimplespark.com/design-creative/",
+        "https://onesimplespark.com/feed/",
+        "https://onesimplespark.com/services",
+        "https://onesimplespark.com/services-2/",
+        "https://onesimplespark.com/small-business-packages/",
+        "https://onesimplespark.com/video-photo/",
+        "https://onesimplespark.com/web-design/",
+        "https://onesimplespark.com/work/",
+        "https://onesimplespark.com/wp-content/litespeed/css/0e432c53063e11344a158e620ced72f6.css?ver=82f79",
+        "https://onesimplespark.com/wp-content/litespeed/css/5f2a87d76c08950b04f2b8a40daf71dd.css?ver=82f79",
+        "https://onesimplespark.com/wp-content/litespeed/css/77faab3c25daa6b43def116034579437.css?ver=82f79",
+        "https://onesimplespark.com/wp-content/litespeed/css/b4e6e2513f0ba43a7db74e12e92c55c4.css?ver=82f79",
+        "https://onesimplespark.com/wp-content/litespeed/js/3e8e78a648615f1e620d893b00e22d40.js?ver=82f79",
+        "https://onesimplespark.com/wp-content/litespeed/js/4f1656c3b1c2b1c20ac3780049086acd.js?ver=82f79",
+        "https://onesimplespark.com/wp-content/litespeed/js/96bb4f0402963c7a2311d76f53035999.js?ver=82f79",
+        "https://onesimplespark.com/wp-content/litespeed/js/99043da228bcd3e1337f7dd2dda1c18c.js?ver=82f79",
+        "https://onesimplespark.com/wp-content/uploads/2021/03/cropped-SS_Blue-Favicon_512px-01-180x180.png",
+        "https://onesimplespark.com/wp-content/uploads/2021/03/cropped-SS_Blue-Favicon_512px-01-192x192.png",
+        "https://onesimplespark.com/wp-content/uploads/2021/03/cropped-SS_Blue-Favicon_512px-01-32x32.png",
+        "https://onesimplespark.com/wp-content/uploads/2022/12/2021-Simple-Spark-Gold-Addy-Award.png",
+        "https://onesimplespark.com/wp-content/uploads/2022/12/2022-Simple-Spark-Gold-Addy-Award-1.png",
+        "https://onesimplespark.com/wp-content/uploads/2022/12/2022-Simple-Spark-Silver-Addy-Award-1.png",
+        "https://onesimplespark.com/wp-content/uploads/2024/11/Boost_Pack_Mockup-1024x595.webp",
+        "https://onesimplespark.com/wp-content/uploads/2024/11/Video_Photo_Collage.webp",
+        "https://onesimplespark.com/wp-content/uploads/2024/12/All_Services_Collage.webp",
+        "https://onesimplespark.com/wp-content/uploads/2024/12/Simple_Spark_New_Logo.webp",
+        "https://onesimplespark.com/wp-content/uploads/2024/12/Simple_Spark_New_Logo2.webp",
+        "https://onesimplespark.com/wp-content/uploads/2025/01/AAF_2024_Silver_Addy.png",
+        "https://onesimplespark.com/wp-content/uploads/2025/01/ar_jonesboro_web-design_2024_inverse.webp",
+        "https://onesimplespark.com/wp-includes/js/jquery/jquery.min.js?ver=3.7.1",
+        "https://onesimplespark.com/wp-json/",
+        "https://onesimplespark.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fonesimplespark.com%2F",
+        "https://onesimplespark.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fonesimplespark.com%2F&format=xml",
+        "https://onesimplespark.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fonesimplespark.com%2Fservices-2%2F",
+        "https://onesimplespark.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fonesimplespark.com%2Fservices-2%2F&format=xml",
+        "https://onesimplespark.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fonesimplespark.com%2Fvideo-photo%2F",
+        "https://onesimplespark.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fonesimplespark.com%2Fvideo-photo%2F&format=xml",
+        "https://onesimplespark.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fonesimplespark.com%2Fwork%2F",
+        "https://onesimplespark.com/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fonesimplespark.com%2Fwork%2F&format=xml",
+        "https://onesimplespark.com/wp-json/wp/v2/pages/3779",
+        "https://onesimplespark.com/wp-json/wp/v2/pages/3807",
+        "https://onesimplespark.com/wp-json/wp/v2/pages/3888",
+        "https://onesimplespark.com/wp-json/wp/v2/pages/3906",
+        "https://onesimplespark.com/xmlrpc.php?rsd"
+      ],
+      "status_changes": [],
+      "signals_delta": {
+        "json_ld_blocks": -3,
+        "microdata_items": -5,
+        "og_tags": -35,
+        "twitter_tags": -9,
+        "robots_pages": -3,
+        "canonical_pages": -3,
+        "hreflang_total": 0,
+        "top_trackers": [
+          [
+            "GTM dataLayer",
+            -4
+          ],
+          [
+            "Google Analytics (gtag)",
+            -4
+          ],
+          [
+            "Google Tag Manager",
+            -4
+          ]
+        ],
+        "hubspot": 0,
+        "pardot": 0,
+        "marketo": 0,
+        "salesforce": 0,
+        "segment": 0,
+        "intercom": 0
+      },
+      "broken_delta": [
+        0,
+        109
+      ]
+    }
+  },
+  "duration_ms": 6595,
+  "settings": {
+    "a": "https://cravemedia.io/",
+    "b": "https://onesimplespark.com/",
+    "depth": 2,
+    "concurrency": 16,
+    "externals": false,
+    "include_subdomains": false,
+    "rate_limit_rps": null,
+    "timeout_secs": 180
+  }
+}

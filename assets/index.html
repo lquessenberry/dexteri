@@ -20,7 +20,8 @@
     .status{display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;padding:1rem;background:linear-gradient(90deg,rgba(10,16,32,.35),rgba(10,16,32,.15))}
     .kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:.8rem}
     .kpi b{display:block;color:var(--muted);font-weight:600}
-    .kpi .v{font-size:1.35rem;margin-top:.25rem;color:#cfe6ff}
+    .kpi .v{font-size:1.35rem;margin-top:.25rem;color:#cfe6ff;transition:transform .2s ease}
+    .kpi .v.bump{transform:scale(1.06)}
     .tabs{display:flex;gap:.5rem;padding:.6rem 1rem;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:linear-gradient(90deg,rgba(10,16,32,.45),rgba(10,16,32,.25))}
     .tab{padding:.45rem .8rem;border:1px solid var(--border);border-radius:999px;background:#0f1526;color:#b9d5f3;cursor:pointer}
     .tab.active{background:linear-gradient(135deg,#6EE7B7,#93c5fd);color:#05152b;border-color:transparent}
@@ -42,11 +43,17 @@
     .dot{width:10px;height:10px;border-radius:50%;background:#64748b}
     .dot.running{background:var(--accent);box-shadow:0 0 0 0 rgba(110,231,183,0.7);animation:pulse 1.5s infinite}
     @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(110,231,183,0.7)}70%{box-shadow:0 0 0 10px rgba(110,231,183,0)}100%{box-shadow:0 0 0 0 rgba(110,231,183,0)}}
-    .progress{height:6px;background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
-    .bar{height:100%;width:30%;background:linear-gradient(90deg,#60a5fa,#06b6d4);animation:indet 1.2s infinite ease-in-out}
-    @keyframes indet{0%{margin-left:-30%}50%{margin-left:70%}100%{margin-left:-30%}}
+    .progress{height:8px;background:#0f172a;border-top:1px solid var(--border);border-bottom:1px solid var(--border);position:relative;overflow:hidden}
+    .bar{height:100%;width:0%;background:linear-gradient(90deg,#60a5fa,#06b6d4);transition:width .3s ease}
     .logs{padding:0 1rem 1rem 1rem}
     .logs pre{background:#0a1020;border:1px solid var(--border);border-radius:10px;padding:.75rem;max-height:240px;overflow:auto;color:#cbd5e1}
+    .modal-backdrop{position:fixed;inset:0;background:rgba(5,10,20,.7);display:flex;align-items:center;justify-content:center;z-index:20}
+    .modal{background:#0f1526;border:1px solid var(--border);border-radius:12px;max-width:860px;width:92vw;max-height:80vh;overflow:auto;color:#dbe7f5;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+    .modal header{display:flex;align-items:center;gap:.5rem;padding:1rem;border-bottom:1px solid var(--border)}
+    .modal .body{padding:1rem;display:grid;grid-template-columns:repeat(2,1fr);gap:1rem}
+    .modal .body .card{background:#0b1020;border:1px solid var(--border);border-radius:10px;padding:.75rem}
+    .modal .body code, .modal .body pre{background:#0b1020;color:#cbd5e1}
+    .modal footer{padding:1rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end}
   </style>
 </head>
 <body>
@@ -58,7 +65,7 @@
 
   <div class="runline">
     <div id="runDot" class="dot"></div>
-    <div id="runText" class="muted">Not running</div>
+    <div id="runText" class="muted">Initializing…</div>
     <span style="flex:1"></span>
     <div id="lastUpdate" class="muted" style="font-size:.85rem"></div>
   </div>
@@ -69,11 +76,18 @@
     <div class="cell" style="grid-column:span 2"><label>Host (optional)</label><input id="host" type="text" placeholder="example.com"></div>
     <div class="cell"><label>Depth</label><input id="depth" type="number" min="0" value="2"></div>
     <div class="cell"><label>HTTP Concurrency</label><input id="concurrency" type="number" min="1" value="32"></div>
+    <div class="cell"><label>Requests per second (optional)</label><input id="rate_limit_rps" type="number" min="1" placeholder="unset"></div>
     <div class="cell" style="grid-column:span 2"><label>Port Spec</label><input id="ports" type="text" placeholder="1-1024,3306,5432"></div>
     <div class="cell"><label>Port Concurrency</label><input id="port_concurrency" type="number" min="1" value="512"></div>
     <div class="cell"><label>Port Timeout (ms)</label><input id="timeout_ms" type="number" min="100" value="800"></div>
     <div class="cell" style="display:flex;align-items:center;gap:.5rem"><input id="externals" type="checkbox"><label style="margin:0">Validate external links</label></div>
-    <div class="cell" style="display:flex;align-items:flex-end"><button id="run" type="submit">Run All</button></div>
+    <div class="cell" style="display:flex;align-items:center;gap:.5rem"><input id="include_subdomains" type="checkbox"><label style="margin:0">Include subdomains</label></div>
+    <div class="cell" style="display:flex;align-items:center;gap:.5rem"><input id="ab_mode" type="checkbox" onchange="toggleAb()"><label style="margin:0">Compare two sites (A/B)</label></div>
+    <div class="cell" id="url_b_wrap" style="grid-column:span 3; display:none"><label>URL B</label><input id="url_b" type="text" placeholder="https://competitor.com"></div>
+    <div class="cell" style="display:flex;align-items:flex-end;gap:.5rem">
+      <button id="run" type="submit" disabled>Run All</button>
+      <button id="stop" type="button" class="btn ghost" disabled>Stop</button>
+    </div>
     <div class="cell" style="grid-column:span 12"><span id="error" class="err"></span></div>
   </form>
 
@@ -90,11 +104,18 @@
     <div class="tab" data-view="broken">Broken Links</div>
     <div class="tab" data-view="ports">Ports</div>
     <div class="tab" data-view="findings">Findings</div>
+    <div class="tab" data-view="signals">Marketing</div>
+    <div class="tab" data-view="security">Security</div>
+    <div class="tab" data-view="compare">Compare</div>
     <span style="flex:1"></span>
     <button class="btn secondary" id="exportJson" type="button">Export JSON</button>
     <button class="btn secondary" id="exportXml" type="button">Export XML</button>
     <button class="btn secondary" id="exportHtml" type="button">Export HTML</button>
+    <button class="btn secondary" id="saveReport" type="button">Save Report…</button>
+    <button class="btn ghost" id="openWebUi" type="button" title="Start and open the Web UI">Open Web UI</button>
     <button class="btn secondary" id="exportCsv" type="button" title="Exports current tab">Export CSV</button>
+    <label class="muted" style="display:inline-flex;align-items:center;gap:.35rem;margin-left:.5rem"><input id="qaMode" type="checkbox"> QA Mode</label>
+    <button class="btn ghost" id="saveQa" type="button" title="Save QA package (events+screens)">Save QA Package</button>
   </div>
 
   <div class="table-wrap" id="tableHost">
@@ -108,7 +129,7 @@
     async function invoke(cmd, args){
       const get = ()=> window.__TAURI__ && (window.__TAURI__.invoke || (window.__TAURI__.tauri && window.__TAURI__.tauri.invoke));
       let inv = get();
-      if(!inv){ for(let i=0;i<30 && !inv;i++){ await new Promise(r=>setTimeout(r,100)); inv = get(); } }
+      if(!inv){ for(let i=0;i<100 && !inv;i++){ await new Promise(r=>setTimeout(r,100)); inv = get(); } }
       if(!inv){ throw new Error('Tauri API not loaded'); }
       return inv(cmd, args);
     }
@@ -117,10 +138,12 @@
     let cachedResults = null;
     let isRunning = false;
     const runBtn = () => document.getElementById('run');
+    const stopBtn = () => document.getElementById('stop');
     const runDot = () => document.getElementById('runDot');
     const runText = () => document.getElementById('runText');
     const progress = () => document.getElementById('progress');
     const lastUpdate = () => document.getElementById('lastUpdate');
+    const progressBar = () => document.querySelector('#progress .bar');
 
     function saveParams(){
       const params = {
@@ -128,25 +151,35 @@
         host: document.getElementById('host').value,
         depth: document.getElementById('depth').value,
         concurrency: document.getElementById('concurrency').value,
+        rate_limit_rps: document.getElementById('rate_limit_rps').value,
         ports: document.getElementById('ports').value,
         port_concurrency: document.getElementById('port_concurrency').value,
         timeout_ms: document.getElementById('timeout_ms').value,
         externals: document.getElementById('externals').checked,
+        include_subdomains: document.getElementById('include_subdomains').checked,
+        ab_mode: document.getElementById('ab_mode').checked,
+        url_b: document.getElementById('url_b').value,
       };
-      localStorage.setItem('dexteri:params', JSON.stringify(params));
+      localStorage.setItem('dexteri_params', JSON.stringify(params));
     }
+
     function loadParams(){
       try{
-        const p = JSON.parse(localStorage.getItem('dexteri:params')||'{}');
-        if(p.url) document.getElementById('url').value = p.url;
-        if(p.host) document.getElementById('host').value = p.host;
-        if(p.depth) document.getElementById('depth').value = p.depth;
-        if(p.concurrency) document.getElementById('concurrency').value = p.concurrency;
-        if(p.ports) document.getElementById('ports').value = p.ports;
-        if(p.port_concurrency) document.getElementById('port_concurrency').value = p.port_concurrency;
-        if(p.timeout_ms) document.getElementById('timeout_ms').value = p.timeout_ms;
-        if(typeof p.externals==='boolean') document.getElementById('externals').checked = p.externals;
-      }catch(e){ console.warn('loadParams', e); }
+        const raw = localStorage.getItem('dexteri_params'); if(!raw) return;
+        const p = JSON.parse(raw);
+        const set=(id,val)=>{ const el=document.getElementById(id); if(el==null||val==null) return; if(el.type==='checkbox') el.checked = !!val; else el.value = val; };
+        set('url', p.url); set('host', p.host); set('depth', p.depth); set('concurrency', p.concurrency);
+        set('rate_limit_rps', p.rate_limit_rps); set('ports', p.ports); set('port_concurrency', p.port_concurrency); set('timeout_ms', p.timeout_ms);
+        set('externals', p.externals); set('include_subdomains', p.include_subdomains);
+        set('ab_mode', p.ab_mode); set('url_b', p.url_b);
+        toggleAb();
+      }catch(e){}
+    }
+
+    function toggleAb(){
+      const on = document.getElementById('ab_mode').checked;
+      const wrap = document.getElementById('url_b_wrap');
+      wrap.style.display = on ? '' : 'none';
     }
 
     function v(id){ const el=document.getElementById(id); if(!el) return undefined; const x=(el.value||'').trim(); return x||undefined; }
@@ -158,23 +191,42 @@
       saveParams();
       if(isRunning) return;
       try{ await invoke('clear_logs'); }catch(e){}
-      const payload={
-        url: document.getElementById('url').value.trim(),
+      const payload = {
+        url: v('url'),
         host: v('host'), depth: num('depth'), concurrency: num('concurrency'),
+        rate_limit_rps: num('rate_limit_rps'),
         externals: document.getElementById('externals').checked,
+        include_subdomains: document.getElementById('include_subdomains').checked,
         ports: v('ports'), port_concurrency: num('port_concurrency'), timeout_ms: num('timeout_ms')
       };
       try{
-        await invoke('run_all', { params: payload });
+        const ab = document.getElementById('ab_mode').checked;
+        if(ab){
+          const payloadB = { ...payload, url: v('url_b') };
+          payloadB.rate_limit_rps = num('rate_limit_rps');
+          await invoke('run_ab', { params: { a: payload, b: payloadB } });
+        }else{
+          await invoke('run_all', { params: payload });
+        }
         isRunning = true;
         document.getElementById('phase').textContent='starting';
         runBtn().disabled = true; runBtn().textContent = 'Running...';
+        stopBtn().disabled = false;
         runDot().classList.add('running'); runText().textContent = 'Running'; progress().style.display='block';
         if(pollHandle) clearInterval(pollHandle);
-        pollHandle = setInterval(poll, 1000);
+        pollHandle = setInterval(poll, 500);
       }catch(e){ document.getElementById('error').textContent = String(e); }
     }
 
+    async function stopRun(){
+      try{
+        stopBtn().disabled = true;
+        await invoke('stop_run');
+        runText().textContent = 'Stopping…';
+      }catch(e){ console.error(e); }
+    }
+
+    let prev = { pages:0, links:0, broken:0 };
     async function poll(){
       try{
         const st = await invoke('get_status');
@@ -184,16 +236,29 @@
         if((ph||'').startsWith('error:')){
           document.getElementById('error').textContent = ph;
         }
-        document.getElementById('k_pages').textContent = st.pages_crawled;
-        document.getElementById('k_links').textContent = st.links_checked;
-        document.getElementById('k_broken').textContent = st.broken_links;
+        updateKpi('k_pages', st.pages_crawled, 'pages');
+        updateKpi('k_links', st.links_checked, 'links');
+        updateKpi('k_broken', st.broken_links, 'broken');
         document.getElementById('k_open').textContent = st.ports_open;
         document.getElementById('k_findings').textContent = st.vuln_findings;
         runText().textContent = st.done ? 'Idle' : `Running: ${st.phase}`;
         runDot().classList.toggle('running', !st.done);
+        // Prefer combined AB progress if available
+        let pct = 0;
+        try{
+          const ab = await invoke('get_ab_progress');
+          if(ab && typeof ab.combined_pct === 'number') pct = ab.combined_pct;
+        }catch(e){ /* ignore */ }
+        if(pct===0){
+          const total = (st.links_checked||0) + (st.queue_size||0) + (st.in_flight||0);
+          pct = total>0 ? Math.floor((st.links_checked/total)*100) : 0;
+        }
         progress().style.display = st.done ? 'none' : 'block';
+        progressBar().style.width = `${Math.max(0, Math.min(100, pct))}%`;
+        if(!st.done){ runText().textContent = `Running: ${st.phase} • ${pct}%`; }
         lastUpdate().textContent = new Date().toLocaleTimeString();
         await renderLogs();
+        await updateWebUiLink();
         if(st.done){
           clearInterval(pollHandle);
           isRunning = false;
@@ -202,8 +267,56 @@
           runDot().classList.remove('running');
           runText().textContent = 'Idle';
           progress().style.display = 'none';
+          stopBtn().disabled = true;
+          // Load AB result into Compare tab if present
+          try{ await loadAbResult(); }catch(e){}
         }
       }catch(e){ console.error(e); }
+    }
+
+    async function loadAbResult(){
+      try{
+        const ab = await invoke('get_ab_result');
+        if(!ab) return;
+        const host = document.getElementById('tableHost');
+        if(currentView !== 'compare') return;
+        const html = renderCompare(ab);
+        host.innerHTML = `<div style="padding:1rem">${html}</div>`;
+      }catch(e){ console.error(e); }
+    }
+
+    function renderCompare(ab){
+      const s = ab.diff.signals_delta;
+      const broken = ab.diff.broken_delta;
+      const tracks = (ab.diff.signals_delta.top_trackers||[]).slice(0,10).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+      return `
+        <h3>Signals Delta (A - B)</h3>
+        <table><thead><tr><th>Metric</th><th>Delta</th></tr></thead>
+          <tbody>
+            <tr><td>JSON-LD blocks</td><td>${s.json_ld_blocks}</td></tr>
+            <tr><td>Microdata items</td><td>${s.microdata_items}</td></tr>
+            <tr><td>OpenGraph tags</td><td>${s.og_tags}</td></tr>
+            <tr><td>Twitter tags</td><td>${s.twitter_tags}</td></tr>
+            <tr><td>Robots pages</td><td>${s.robots_pages}</td></tr>
+            <tr><td>Canonical pages</td><td>${s.canonical_pages}</td></tr>
+            <tr><td>Hreflang total</td><td>${s.hreflang_total}</td></tr>
+            <tr><td>Broken links (A, B)</td><td>${broken[0]} vs ${broken[1]}</td></tr>
+          </tbody>
+        </table>
+        <h3 style="margin-top:1rem">Top Tracker Deltas</h3>
+        <table><thead><tr><th>Tracker</th><th>A - B</th></tr></thead><tbody>${tracks||'<tr><td colspan="2">None</td></tr>'}</tbody></table>
+      `;
+    }
+
+    function updateKpi(id, val, key){
+      const el = document.getElementById(id);
+      if(!el) return;
+      const prevVal = prev[key];
+      el.textContent = val;
+      if(val !== prevVal){
+        const vEl = el; vEl.classList.add('bump'); setTimeout(()=>vEl.classList.remove('bump'), 220);
+        prev[key] = val;
+      }
     }
 
     async function loadResults(){
@@ -268,13 +381,28 @@
     async function openUrl(u){ try { await invoke('open_in_browser', { url: u }); } catch(e){ console.error(e); } }
     async function copyText(t){ try{ await navigator.clipboard.writeText(t); }catch(e){ console.error(e); } }
 
+    let qaLastLogCount = 0;
     async function renderLogs(){
       try{
         const lines = await invoke('get_logs');
         const pre = document.getElementById('logPre');
         if(!pre) return;
         const autoScroll = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
-        pre.textContent = (lines||[]).slice(-500).join('\n');
+        const out = (lines||[]);
+        // QA: detect new error-like lines and capture screenshots, limited per poll
+        if(qa.enabled){
+          const maxShots = 3;
+          let shots = 0;
+          for(let i = qaLastLogCount; i < out.length && shots < maxShots; i++){
+            const line = out[i]||'';
+            if(/\b(error|panic|fail(ed)?|exception)\b/i.test(line)){
+              try{ await qa.capture(`log_error:${i}: ${line.substring(0,140)}`); }catch(e){}
+              shots++;
+            }
+          }
+          qaLastLogCount = out.length;
+        }
+        pre.textContent = out.slice(-500).join('\n');
         if(autoScroll) pre.scrollTop = pre.scrollHeight;
       }catch(e){ /* no-op */ }
     }
@@ -306,13 +434,18 @@
             <td class="trunc" title="${esc(r.title)}">${esc(r.title)}</td>
             <td class="trunc" title="${esc(r.content_type)}">${esc(r.content_type)}</td>
             <td>${r.bytes}</td>
-            <td class="row-actions"><button class="btn" data-copy="${esc(r.url)}">Copy</button></td>
+            <td class="row-actions">
+              <button class="btn" data-copy="${esc(r.url)}">Copy</button>
+              <button class="btn secondary" data-details-url="${esc(r.url)}">Details</button>
+            </td>
           `;
           tbody.appendChild(tr);
         }
       } else if(currentView==='broken'){
         const cols = [
-          {key:'i',label:'#',width:'50px'},{key:'url',label:'URL',width:'40%'},{key:'status',label:'Status',width:'80px'},{key:'reason',label:'Reason',width:'30%'},{key:'parent',label:'Parent',width:'30%'},{key:'external',label:'Ext',width:'60px'}
+          {key:'i',label:'#',width:'50px'},
+          {key:'url',label:'URL',width:'40%'},{key:'status',label:'Status',width:'80px'},
+          {key:'reason',label:'Reason',width:'30%'},{key:'parent',label:'Parent',width:'30%'},{key:'external',label:'Ext',width:'60px'}
         ];
         buildHeaders(cols);
         let rows = cachedResults.crawl.broken_links.map((b,i)=>({i:i+1,url:b.url,status:b.status||'',reason:b.reason,parent:b.parent,external:b.external}));
@@ -344,15 +477,120 @@
         rows = rows.filter(r=>passesFilters(r, cols));
         if(sortState.key){ const k=sortState.key; rows.sort((a,b)=>(''+a[k]).localeCompare(''+b[k], undefined, {numeric:true})); if(!sortState.asc) rows.reverse(); }
         for(const r of rows){ const tr=document.createElement('tr'); tr.innerHTML = `<td>${r.i}</td><td>${esc(r.severity)}</td><td class="trunc" title="${esc(r.title)}">${esc(r.title)}</td><td class="trunc" title="${esc(r.description)}">${esc(r.description)}</td><td class="trunc" title="${esc(r.url)}"><a href="#" data-url="${esc(r.url)}">${esc(r.url)}</a></td>`; tbody.appendChild(tr); }
+      } else if(currentView==='signals'){
+        const cols = [
+          {key:'i',label:'#',width:'50px'},
+          {key:'url',label:'URL',width:'30%'},
+          {key:'json_ld',label:'JSON-LD',width:'90px'},
+          {key:'microdata',label:'Microdata',width:'100px'},
+          {key:'og',label:'OpenGraph',width:'110px'},
+          {key:'tw',label:'Twitter',width:'90px'},
+          {key:'robots',label:'Robots',width:'16%'},
+          {key:'canonical',label:'Canonical',width:'16%'},
+          {key:'hreflang',label:'Hreflang',width:'95px'},
+          {key:'trackers',label:'Trackers',width:'20%'}
+        ];
+        buildHeaders(cols);
+        let rows = cachedResults.crawl.pages.map((p,i)=>{
+          const s = p.signals || {};
+          return {
+            i:i+1,
+            url:p.url,
+            json_ld: s.json_ld_blocks||0,
+            microdata: s.microdata_items||0,
+            og: s.open_graph_tags||0,
+            tw: s.twitter_tags||0,
+            robots: s.meta_robots||'',
+            canonical: s.canonical_url||'',
+            hreflang: s.hreflang_count||0,
+            trackers: (s.trackers||[]).join('; ')
+          };
+        });
+        rows = rows.filter(r=>passesFilters(r, cols));
+        if(sortState.key){ const k=sortState.key; rows.sort((a,b)=>(''+a[k]).localeCompare(''+b[k], undefined, {numeric:true})); if(!sortState.asc) rows.reverse(); }
+        for(const r of rows){ const tr=document.createElement('tr'); tr.innerHTML = `
+          <td>${r.i}</td>
+          <td class="trunc" title="${esc(r.url)}"><a href="#" data-url="${esc(r.url)}">${esc(r.url)}</a></td>
+          <td>${r.json_ld}</td>
+          <td>${r.microdata}</td>
+          <td>${r.og}</td>
+          <td>${r.tw}</td>
+          <td class="trunc" title="${esc(r.robots)}">${esc(r.robots)}</td>
+          <td class="trunc" title="${esc(r.canonical)}">${esc(r.canonical)}</td>
+          <td>${r.hreflang}</td>
+          <td class="trunc" title="${esc(r.trackers)}">${esc(r.trackers)}</td>
+        `; tbody.appendChild(tr); }
+      } else if(currentView==='security'){
+        const cols = [
+          {key:'i',label:'#',width:'50px'},
+          {key:'level',label:'Level',width:'90px'},
+          {key:'title',label:'Title',width:'25%'},
+          {key:'description',label:'Description',width:'50%'},
+          {key:'url',label:'URL',width:'25%'}
+        ];
+        buildHeaders(cols);
+        let rows = cachedResults.security.map((f,i)=>({
+          i:i+1,
+          level:f.level||'',
+          title:f.title||'',
+          description:f.description||'',
+          url:f.url||''
+        }));
+        rows = rows.filter(r=>passesFilters(r, cols));
+        if(sortState.key){ const k=sortState.key; rows.sort((a,b)=>(''+a[k]).localeCompare(''+b[k], undefined, {numeric:true})); if(!sortState.asc) rows.reverse(); }
+        for(const r of rows){ const tr=document.createElement('tr'); tr.innerHTML = `
+          <td>${r.i}</td>
+          <td>${esc(r.level)}</td>
+          <td class="trunc" title="${esc(r.title)}">${esc(r.title)}</td>
+          <td class="trunc" title="${esc(r.description)}">${esc(r.description)}</td>
+          <td class="trunc" title="${esc(r.url)}"><a href="#" data-url="${esc(r.url)}">${esc(r.url)}</a></td>
+        `; tbody.appendChild(tr); }
+      } else if(currentView==='compare'){
+        // Render compare table
       }
       // actions
-      tbody.querySelectorAll('a[data-url]').forEach(a=>a.addEventListener('click', (e)=>{ e.preventDefault(); const u=a.dataset.url||''; const url = u.match(/^https?:\/\//)?u:`http://${u}`; openUrl(url); }));
+      tbody.querySelectorAll('a[data-url]').forEach(a=>a.addEventListener('click', (e)=>{ e.preventDefault(); const u=a.dataset.url||''; const url = /^https?:\/\//.test(u) ? u : `http://${u}`; openUrl(url); }));
       tbody.querySelectorAll('button[data-copy]').forEach(b=>b.addEventListener('click', ()=>copyText(b.dataset.copy||'')));
+      tbody.querySelectorAll('button[data-details-url]').forEach(b=>b.addEventListener('click', ()=>openSignals(b.dataset.detailsUrl||b.getAttribute('data-details-url')||'')));
     }
 
-    function esc(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    // esc is defined above; avoid duplicate definitions
+    function openSignals(url){
+      const page = (cachedResults?.crawl?.pages||[]).find(p=>p.url===url);
+      const modal = document.getElementById('sigModal');
+      const title = document.getElementById('sigTitle');
+      const body = document.getElementById('sigBody');
+      if(!modal||!title||!body){ return; }
+      title.textContent = url;
+      const s = page?.signals || {};
+      function renderList(name, items){ const safe = (items||[]).join(', '); return `<div class="card"><b>${name}</b><div class="muted" style="margin-top:.35rem;white-space:pre-wrap;word-break:break-word">${esc(safe||'')}</div></div>`; }
+      function renderKV(name, val){ return `<div class="card"><b>${name}</b><div style="font-size:1.1rem;margin-top:.2rem">${esc((''+(val??'')).toString())}</div></div>`; }
+      body.innerHTML =
+        renderKV('JSON-LD blocks', s.json_ld_blocks||0) +
+        renderList('JSON-LD @type', s.json_ld_types||[]) +
+        renderKV('Microdata items', s.microdata_items||0) +
+        renderList('Microdata itemtypes', s.microdata_types||[]) +
+        renderKV('OpenGraph tags', s.open_graph_tags||0) +
+        renderList('OG properties', s.og_props||[]) +
+        renderKV('Twitter tags', s.twitter_tags||0) +
+        renderList('Twitter names', s.twitter_names||[]) +
+        renderKV('Robots', s.meta_robots||'') +
+        renderKV('Canonical', s.canonical_url||'') +
+        renderKV('Hreflang count', s.hreflang_count||0) +
+        renderList('Hreflang langs', s.hreflang_langs||[]) +
+        renderList('Trackers', s.trackers||[]);
+      modal.style.display='flex';
+    }
+    function closeSignals(){ const modal=document.getElementById('sigModal'); if(modal) modal.style.display='none'; }
 
-    function setTab(v){ currentView = v; document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.view===v)); renderTable(); }
+    function setTab(v){
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      const tab = Array.from(document.querySelectorAll('.tab')).find(t=>t.dataset.view===v);
+      if(tab) tab.classList.add('active');
+      currentView = v;
+      if(v==='compare'){ loadAbResult(); return; }
+      renderTable();
+    }
 
     async function exportKind(kind){
       try{
@@ -370,13 +608,44 @@
     document.getElementById('exportJson').addEventListener('click', async ()=>{ try{ const [n,m,c]=await invoke('export_data',{format:'json'}); download(n,m,c);}catch(e){console.error(e);} });
     document.getElementById('exportXml').addEventListener('click', async ()=>{ try{ const [n,m,c]=await invoke('export_data',{format:'xml'}); download(n,m,c);}catch(e){console.error(e);} });
     document.getElementById('exportHtml').addEventListener('click', async ()=>{ try{ const [n,m,c]=await invoke('export_data',{format:'html'}); download(n,m,c);}catch(e){console.error(e);} });
+    document.getElementById('saveReport').addEventListener('click', async ()=>{
+      try{
+        const api = window.__TAURI__;
+        if(!api || !api.dialog || !api.dialog.save){
+          // Fallback to simple download
+          const [n,m,c]=await invoke('export_data',{format:'html'}); download(n,m,c); return;
+        }
+        const suggested = 'dexteri-report.html';
+        const path = await api.dialog.save({ defaultPath: suggested, filters: [{ name:'HTML', extensions:['html'] }] });
+        if(path){ await invoke('save_report_to', { path }); runText().textContent = `Saved: ${path}`; }
+      }catch(e){ console.error(e); }
+    });
+    document.getElementById('stop').addEventListener('click', stopRun);
+    document.getElementById('openWebUi').addEventListener('click', async ()=>{
+      try{
+        const url = await invoke('start_web_ui', { bind: null });
+        // Open locally in system browser
+        await invoke('open_in_browser', { url });
+      }catch(e){ console.error(e); }
+    });
     document.getElementById('exportCsv').addEventListener('click', ()=>{
-      const m = {pages:'pages', broken:'broken_links', ports:'ports', findings:'findings'}; exportKind(m[currentView]||'pages');
+      const m = {pages:'pages', broken:'broken_links', ports:'ports', findings:'findings', signals:'signals', security:'security'}; exportKind(m[currentView]||'pages');
     });
     document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>setTab(t.dataset.view)));
 
     loadParams();
-    (async()=>{ try{ const r = await invoke('get_results'); if(r){ cachedResults=r; renderTable(); } }catch(e){} })();
+    (async()=>{
+      try{
+        // wait until Tauri API is available, then enable Run
+        const get = ()=> window.__TAURI__ && (window.__TAURI__.invoke || (window.__TAURI__.tauri && window.__TAURI__.tauri.invoke));
+        let inv = get();
+        if(!inv){ for(let i=0;i<100 && !inv;i++){ await new Promise(r=>setTimeout(r,100)); inv = get(); } }
+        if(inv){ runBtn().disabled = false; runText().textContent = 'Idle'; }
+        // try preloading results
+        const r = await invoke('get_results'); if(r){ cachedResults=r; renderTable(); }
+        try{ await loadAbResult(); }catch(e){}
+      }catch(e){ /* ignore on startup */ }
+    })();
   </script>
 
   <div class="logs">

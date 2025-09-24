@@ -3,7 +3,10 @@ use std::path::Path;
 use tantivy::collector::TopDocs;
 use tantivy::doc;
 use tantivy::query::QueryParser;
-use tantivy::schema::{document::{OwnedValue, TantivyDocument}, Schema, STORED, TEXT};
+use tantivy::schema::{
+    document::{OwnedValue, TantivyDocument},
+    Schema, STORED, TEXT,
+};
 use tantivy::Index;
 
 use crate::models::{IndexStats, Page, SearchHit};
@@ -37,7 +40,9 @@ pub async fn index_pages(out_dir: &Path, pages: &Vec<Page>) -> Result<IndexStats
     }
     writer.commit()?;
 
-    Ok(IndexStats { docs_indexed: count })
+    Ok(IndexStats {
+        docs_indexed: count,
+    })
 }
 
 pub fn search_index(index_dir: &Path, query: &str, limit: usize) -> Result<Vec<SearchHit>> {
@@ -58,12 +63,10 @@ pub fn search_index(index_dir: &Path, query: &str, limit: usize) -> Result<Vec<S
     let mut hits = Vec::new();
     for (_score, addr) in top_docs {
         let retrieved = searcher.doc::<TantivyDocument>(addr)?;
-        let t = retrieved
-            .get_first(title)
-            .and_then(|v| match v {
-                OwnedValue::Str(s) => Some(s.clone()),
-                _ => None,
-            });
+        let t = retrieved.get_first(title).and_then(|v| match v {
+            OwnedValue::Str(s) => Some(s.clone()),
+            _ => None,
+        });
         let u = retrieved
             .get_first(url)
             .and_then(|v| match v {

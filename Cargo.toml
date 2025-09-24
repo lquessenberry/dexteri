@@ -27,13 +27,17 @@ chrono = { version = "0.4" }
 html2text = "0.11"
 html-escape = "0.2"
 # Tantivy for full-text indexing
- tantivy = "0.22"
- futures = "0.3"
- # Web dashboard
- axum = { version = "0.7" }
- tower-http = { version = "0.6", features = ["fs", "trace"] }
- # Desktop GUI (Tauri)
- tauri = { version = "1", features = ["api-all"] }
+tantivy = "0.22"
+futures = "0.3"
+# Web dashboard
+axum = { version = "0.7" }
+tower-http = { version = "0.6", features = ["fs", "trace"] }
+# Desktop GUI (Tauri)
+tauri = { version = "1", features = ["api-all"] }
+# Static charts in report
+plotters = "0.3"
+plotters-svg = "0.3"
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
 
 [build-dependencies]
 tauri-build = { version = "1" }
@@ -44,4 +48,4 @@ path = "src/gui.rs"
 
 [dev-dependencies]
 assert_cmd = "2.0"
- predicates = "3.1"
+predicates = "3.1"

@@ -3,5 +3,7 @@ pub mod indexer;
 pub mod models;
 pub mod ports;
 pub mod report;
+pub mod security;
 pub mod util;
 pub mod vuln;
+pub mod web;

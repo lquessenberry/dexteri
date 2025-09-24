@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use url::Url;
 
-use crate::{crawler, models::*, ports, report, util, vuln};
+use crate::{crawler, models::*, ports, report, security, util, vuln};
 
 #[derive(Clone, Default)]
 struct AppState {
@@ -23,6 +23,7 @@ struct CombinedResult {
     crawl: CrawlResult,
     ports: PortsResult,
     vuln: VulnReport,
+    security: Vec<SecurityFlag>,
 }
 
 #[derive(Default)]
@@ -59,9 +60,11 @@ struct RunAllParams {
     depth: Option<usize>,
     concurrency: Option<usize>,
     externals: Option<bool>,
+    include_subdomains: Option<bool>,
     ports: Option<String>,
     port_concurrency: Option<usize>,
     timeout_ms: Option<u64>,
+    rate_limit_rps: Option<u32>,
 }
 
 pub async fn serve(bind: SocketAddr) -> anyhow::Result<()> {
@@ -74,6 +77,7 @@ pub async fn serve(bind: SocketAddr) -> anyhow::Result<()> {
         .route("/api/export", get(export_data))
         .route("/api/run/all", post(run_all))
         .route("/report", get(get_report))
+        .route("/charts", get(charts))
         .with_state(state);
 
     axum::serve(tokio::net::TcpListener::bind(bind).await?, app).await?;
@@ -110,13 +114,22 @@ async fn get_results_json(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct ExportQuery {
-    format: String,        // json | xml | csv | html
-    kind: Option<String>,  // for csv: pages | broken_links | ports | findings
+async fn charts() -> impl IntoResponse {
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CACHE_CONTROL, "no-store".parse().unwrap());
+    (StatusCode::OK, headers, Html(CHARTS_HTML)).into_response()
 }
 
-async fn export_data(State(state): State<AppState>, Query(q): Query<ExportQuery>) -> impl IntoResponse {
+#[derive(Debug, Deserialize)]
+struct ExportQuery {
+    format: String,       // json | xml | csv | html
+    kind: Option<String>, // for csv: pages | broken_links | ports | findings
+}
+
+async fn export_data(
+    State(state): State<AppState>,
+    Query(q): Query<ExportQuery>,
+) -> impl IntoResponse {
     let inner = state.inner.read().await;
     let Some(results) = &inner.last_results else {
         return (StatusCode::NOT_FOUND, "No results to export").into_response();
@@ -124,39 +137,68 @@ async fn export_data(State(state): State<AppState>, Query(q): Query<ExportQuery>
     match q.format.as_str() {
         "html" => {
             if let Some(html) = &inner.last_report_html {
-                let headers = [("Content-Type", "text/html; charset=utf-8"), ("Content-Disposition", "attachment; filename=report.html")];
+                let headers = [
+                    ("Content-Type", "text/html; charset=utf-8"),
+                    ("Content-Disposition", "attachment; filename=report.html"),
+                ];
                 return (StatusCode::OK, headers, html.clone()).into_response();
             }
             (StatusCode::NOT_FOUND, "No report yet").into_response()
         }
         "json" => {
-            let headers = [("Content-Type", "application/json"), ("Content-Disposition", "attachment; filename=results.json")];
-            (StatusCode::OK, headers, serde_json::to_string_pretty(results).unwrap()).into_response()
+            let headers = [
+                ("Content-Type", "application/json"),
+                ("Content-Disposition", "attachment; filename=results.json"),
+            ];
+            (
+                StatusCode::OK,
+                headers,
+                serde_json::to_string_pretty(results).unwrap(),
+            )
+                .into_response()
         }
         "xml" => {
             let xml = build_xml(results);
-            let headers = [("Content-Type", "application/xml"), ("Content-Disposition", "attachment; filename=results.xml")];
+            let headers = [
+                ("Content-Type", "application/xml"),
+                ("Content-Disposition", "attachment; filename=results.xml"),
+            ];
             (StatusCode::OK, headers, xml).into_response()
         }
         "csv" => {
             let kind = q.kind.unwrap_or_else(|| "pages".to_string());
             let (name, csv, content_type) = match kind.as_str() {
                 "pages" => ("pages.csv", csv_pages(&results.crawl.pages), "text/csv"),
-                "broken_links" => ("broken_links.csv", csv_broken(&results.crawl.broken_links), "text/csv"),
+                "broken_links" => (
+                    "broken_links.csv",
+                    csv_broken(&results.crawl.broken_links),
+                    "text/csv",
+                ),
                 "ports" => ("ports.csv", csv_ports(&results.ports), "text/csv"),
                 "findings" => ("findings.csv", csv_findings(&results.vuln), "text/csv"),
+                "security" => ("security.csv", csv_security(&results.security), "text/csv"),
                 _ => ("pages.csv", csv_pages(&results.crawl.pages), "text/csv"),
             };
             let mut headers = HeaderMap::new();
             headers.insert(header::CONTENT_TYPE, content_type.parse().unwrap());
-            headers.insert(header::CONTENT_DISPOSITION, format!("attachment; filename={}", name).parse().unwrap());
+            headers.insert(
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename={}", name).parse().unwrap(),
+            );
             (StatusCode::OK, headers, csv).into_response()
         }
         _ => (StatusCode::BAD_REQUEST, "Unsupported format").into_response(),
     }
 }
 
-fn csv_escape(s: &str) -> String { let needs = s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r'); if needs { format!("\"{}\"", s.replace('"', "\"\"")) } else { s.to_string() } }
+fn csv_escape(s: &str) -> String {
+    let needs = s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r');
+    if needs {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
+    }
+}
 
 fn csv_pages(pages: &Vec<Page>) -> String {
     let mut out = String::from("url,status,title,content_type,bytes\n");
@@ -179,14 +221,19 @@ fn csv_broken(errs: &Vec<LinkError>) -> String {
         let reason = csv_escape(&e.reason);
         let parent = csv_escape(&e.parent);
         let external = e.external.to_string();
-        out.push_str(&format!("{},{},{},{},{}\n", url, status, reason, parent, external));
+        out.push_str(&format!(
+            "{},{},{},{},{}\n",
+            url, status, reason, parent, external
+        ));
     }
     out
 }
 
 fn csv_ports(p: &PortsResult) -> String {
     let mut out = String::from("port\n");
-    for port in &p.open_ports { out.push_str(&format!("{}\n", port)); }
+    for port in &p.open_ports {
+        out.push_str(&format!("{}\n", port));
+    }
     out
 }
 
@@ -202,10 +249,28 @@ fn csv_findings(v: &VulnReport) -> String {
     out
 }
 
+fn csv_security(sec: &Vec<SecurityFlag>) -> String {
+    let mut out = String::from("level,title,description,url\n");
+    for f in sec {
+        let lvl = csv_escape(&f.level);
+        let t = csv_escape(&f.title);
+        let d = csv_escape(&f.description);
+        let u = csv_escape(f.url.as_deref().unwrap_or(""));
+        out.push_str(&format!("{},{},{},{}\n", lvl, t, d, u));
+    }
+    out
+}
+
 fn build_xml(r: &CombinedResult) -> String {
     let mut s = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<dexteri>\n");
-    s.push_str(&format!("  <summary pages=\"{}\" links=\"{}\" broken=\"{}\" ports_open=\"{}\" findings=\"{}\"/>\n",
-        r.crawl.pages_crawled, r.crawl.links_checked, r.crawl.broken_links.len(), r.ports.open_ports.len(), r.vuln.findings.len()));
+    s.push_str(&format!(
+        "  <summary pages=\"{}\" links=\"{}\" broken=\"{}\" ports_open=\"{}\" findings=\"{}\"/>\n",
+        r.crawl.pages_crawled,
+        r.crawl.links_checked,
+        r.crawl.broken_links.len(),
+        r.ports.open_ports.len(),
+        r.vuln.findings.len()
+    ));
     s.push_str("  <pages>\n");
     for p in &r.crawl.pages {
         s.push_str(&format!(
@@ -224,20 +289,36 @@ fn build_xml(r: &CombinedResult) -> String {
             xesc(&b.url), b.status.map(|v| v.to_string()).unwrap_or_default(), b.external, xesc(&b.reason), xesc(&b.parent)));
     }
     s.push_str("  </brokenLinks>\n  <ports>\n");
-    for port in &r.ports.open_ports { s.push_str(&format!("    <open>{}</open>\n", port)); }
+    for port in &r.ports.open_ports {
+        s.push_str(&format!("    <open>{}</open>\n", port));
+    }
     s.push_str("  </ports>\n  <findings>\n");
     for f in &r.vuln.findings {
         s.push_str(&format!(
             "    <finding severity=\"{}\"><title>{}</title><description>{}</description><url>{}</url></finding>\n",
             xesc(&f.severity), xesc(&f.title), xesc(&f.description), xesc(f.url.as_deref().unwrap_or(""))));
     }
-    s.push_str("  </findings>\n</dexteri>\n");
+    s.push_str("  </findings>\n  <security>\n");
+    for f in &r.security {
+        s.push_str(&format!("    <flag level=\"{}\"><title>{}</title><description>{}</description><url>{}</url></flag>\n",
+            xesc(&f.level), xesc(&f.title), xesc(&f.description), xesc(f.url.as_deref().unwrap_or(""))));
+    }
+    s.push_str("  </security>\n</dexteri>\n");
     s
 }
 
-fn xesc(s: &str) -> String { s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&apos;") }
+fn xesc(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
 
-async fn run_all(State(state): State<AppState>, Json(params): Json<RunAllParams>) -> impl IntoResponse {
+async fn run_all(
+    State(state): State<AppState>,
+    Json(params): Json<RunAllParams>,
+) -> impl IntoResponse {
     {
         let mut inner = state.inner.write().await;
         if inner.running {
@@ -305,7 +386,12 @@ async fn run_pipeline(state: AppState, params: RunAllParams) -> anyhow::Result<(
     let depth = params.depth.unwrap_or(2);
     let concurrency = params.concurrency.unwrap_or(32);
     let externals = params.externals.unwrap_or(false);
-    let ports_spec = params.ports.as_deref().map(ports::parse_ports).transpose()?;
+    let include_subdomains = params.include_subdomains.unwrap_or(false);
+    let ports_spec = params
+        .ports
+        .as_deref()
+        .map(ports::parse_ports)
+        .transpose()?;
     let ports_vec = ports_spec.unwrap_or_else(ports::common_ports);
     let port_concurrency = params.port_concurrency.unwrap_or(512);
     let timeout_ms = params.timeout_ms.unwrap_or(800);
@@ -320,7 +406,19 @@ async fn run_pipeline(state: AppState, params: RunAllParams) -> anyhow::Result<(
             st.phase = "crawl".into();
         }
     }
-    let crawl_res = crawler::crawl(&client, &start_url, depth, concurrency, externals).await?;
+    let crawl_res = crawler::crawl_with_logs(
+        &client,
+        &start_url,
+        depth,
+        concurrency,
+        externals,
+        include_subdomains,
+        None,
+        None,
+        None,
+        params.rate_limit_rps,
+    )
+    .await?;
     {
         let mut inner = state.inner.write().await;
         if let Some(st) = inner.status.as_mut() {
@@ -338,7 +436,7 @@ async fn run_pipeline(state: AppState, params: RunAllParams) -> anyhow::Result<(
             st.phase = "ports".into();
         }
     }
-    let ports_res = ports::scan_host(&host, &ports_vec, port_concurrency, timeout_ms).await?;
+    let ports_res = ports::scan_host(&host, &ports_vec, port_concurrency, timeout_ms, None).await?;
     {
         let mut inner = state.inner.write().await;
         if let Some(st) = inner.status.as_mut() {
@@ -363,15 +461,45 @@ async fn run_pipeline(state: AppState, params: RunAllParams) -> anyhow::Result<(
         }
     }
 
-    // Report (write to file and capture HTML + results cache)
-    let path = std::path::PathBuf::from("report.html");
-    report::write_report(&path, &start_url, &crawl_res, &ports_res, &vuln_res)?;
+    // Security posture (passive checks)
+    {
+        let mut inner = state.inner.write().await;
+        inner.phase = "security".into();
+        if let Some(st) = inner.status.as_mut() {
+            st.phase = "security".into();
+        }
+    }
+    let security_flags = match security::check_security_posture(&client, &start_url).await {
+        Ok(v) => v,
+        Err(_) => Vec::new(),
+    };
+
+    // Report: write to a writable temp file and capture contents
+    let tmp_name = format!(
+        "dexteri-report-{}.html",
+        chrono::Local::now().format("%Y%m%d%H%M%S")
+    );
+    let path = std::env::temp_dir().join(tmp_name);
+    report::write_report(
+        &path,
+        &start_url,
+        &crawl_res,
+        &ports_res,
+        &vuln_res,
+        &security_flags,
+    )?;
     let html = tokio::fs::read_to_string(&path).await.unwrap_or_default();
+    let _ = tokio::fs::remove_file(&path).await;
 
     {
         let mut inner = state.inner.write().await;
         inner.last_report_html = Some(html);
-        inner.last_results = Some(CombinedResult { crawl: crawl_res, ports: ports_res, vuln: vuln_res });
+        inner.last_results = Some(CombinedResult {
+            crawl: crawl_res,
+            ports: ports_res,
+            vuln: vuln_res,
+            security: security_flags,
+        });
     }
 
     Ok(())
@@ -439,10 +567,12 @@ tbody tr:nth-child(even){background:rgba(255,255,255,.02)}
     <div class="cell" style="grid-column:span 2"><label>Host (optional)</label><input id="host" type="text" placeholder="example.com"></div>
     <div class="cell"><label>Depth</label><input id="depth" type="number" min="0" value="2"></div>
     <div class="cell"><label>HTTP Concurrency</label><input id="concurrency" type="number" min="1" value="32"></div>
+    <div class="cell"><label>Requests per second (optional)</label><input id="rate_limit_rps" type="number" min="1" placeholder="unset"></div>
     <div class="cell" style="grid-column:span 2"><label>Port Spec</label><input id="ports" type="text" placeholder="1-1024,3306,5432"></div>
     <div class="cell"><label>Port Concurrency</label><input id="port_concurrency" type="number" min="1" value="512"></div>
     <div class="cell"><label>Port Timeout (ms)</label><input id="timeout_ms" type="number" min="100" value="800"></div>
     <div class="cell" style="display:flex;align-items:center;gap:.5rem"><input id="externals" type="checkbox"><label style="margin:0">Validate external links</label></div>
+    <div class="cell" style="display:flex;align-items:center;gap:.35rem"><input id="include_subdomains" type="checkbox">Include subdomains</div>
     <div class="cell" style="display:flex;align-items:flex-end"><button id="run" type="submit">Run All</button></div>
   </div>
 </form>
@@ -479,6 +609,7 @@ tbody tr:nth-child(even){background:rgba(255,255,255,.02)}
       <option value="broken_links">CSV: Broken Links</option>
       <option value="ports">CSV: Ports</option>
       <option value="findings">CSV: Findings</option>
+      <option value="security">CSV: Security</option>
     </select>
     <button class="btn secondary" onclick="exportCsv(event)">Download CSV</button>
   </div>
@@ -523,7 +654,9 @@ async function runAll(ev){
       host: v("host"),
       depth: num("depth"),
       concurrency: num("concurrency"),
+      rate_limit_rps: num("rate_limit_rps"),
       externals: document.getElementById('externals').checked,
+      include_subdomains: document.getElementById('include_subdomains').checked,
       ports: v("ports"),
       port_concurrency: num("port_concurrency"),
       timeout_ms: num("timeout_ms")
@@ -604,6 +737,11 @@ function renderTable(){
     cachedResults.vuln.findings.forEach((f,i)=>{
       tb.innerHTML += `<tr><td>${i+1}</td><td>${esc(f.severity)}</td><td class="trunc" title="${esc(f.title)}">${esc(f.title)}</td><td class="trunc" title="${esc(f.description)}">${esc(f.description)}</td><td class="trunc" title="${esc(f.url||'')}">${esc(f.url||'')}</td></tr>`;
     });
+  } else if(currentView==='security'){
+    th.innerHTML = '<tr><th style="width:44px">#</th><th>Level</th><th>Title</th><th>Description</th><th>URL</th></tr>';
+    cachedResults.security.forEach((f,i)=>{
+      tb.innerHTML += `<tr><td>${i+1}</td><td>${esc(f.level)}</td><td class="trunc" title="${esc(f.title)}">${esc(f.title)}</td><td class="trunc" title="${esc(f.description)}">${esc(f.description)}</td><td class="trunc" title="${esc(f.url||'')}">${esc(f.url||'')}</td></tr>`;
+    });
   }
   applyFilter();
 }
@@ -649,6 +787,51 @@ window.addEventListener('DOMContentLoaded', () => {
   if(btn){ btn.addEventListener('click', runAll); }
 });
 </script>
+</body>
+</html>
+"###;
+
+static CHARTS_HTML: &str = r###"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dexteri++ Charts</title>
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+  <style> body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu;margin:1rem} .wrap{display:grid;grid-template-columns:1fr;gap:1rem} .card{border:1px solid #ddd;border-radius:8px;padding:1rem} </style>
+</head>
+<body>
+  <h2>Dexteri++ Charts</h2>
+  <p class="muted">Fetches /api/results.json and renders basic charts for marketing signals and top trackers.</p>
+  <div class="wrap">
+    <div class="card"><div id="chart_signals"></div></div>
+    <div class="card"><div id="chart_trackers"></div></div>
+  </div>
+  <script>
+    async function load(){
+      try{
+        const r = await fetch('/api/results.json'); if(!r.ok) return;
+        const data = await r.json();
+        const pages = data.crawl?.pages||[];
+        let jsonld=0,micro=0,og=0,tw=0,robots=0,canon=0,hl=0;
+        const trackerCounts = new Map();
+        for(const p of pages){
+          const s=p.signals||{};
+          jsonld += s.json_ld_blocks||0; micro += s.microdata_items||0; og += s.open_graph_tags||0; tw += s.twitter_tags||0;
+          if((s.meta_robots||'').length>0) robots++;
+          if((s.canonical_url||'').length>0) canon++;
+          hl += s.hreflang_count||0;
+          for(const t of (s.trackers||[])){ trackerCounts.set(t, (trackerCounts.get(t)||0)+1); }
+        }
+        Plotly.newPlot('chart_signals', [{
+          x:['JSON-LD','Microdata','OpenGraph','Twitter','Robots','Canonical','Hreflang'], y:[jsonld,micro,og,tw,robots,canon,hl], type:'bar'
+        }], {title:'Marketing Signals Totals'});
+        const arr = Array.from(trackerCounts.entries()).sort((a,b)=>b[1]-a[1]).slice(0,10);
+        Plotly.newPlot('chart_trackers', [{ x: arr.map(a=>a[0]), y: arr.map(a=>a[1]), type:'bar' }], { title:'Top Trackers (pages)' });
+      }catch(e){ console.error(e); }
+    }
+    load();
+  </script>
 </body>
 </html>
 "###;
