@@ -1,0 +1,129 @@
+name: E2E (Cypress + Gherkin)
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  cypress-e2e:
+    name: Cypress BDD (pure web)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install frontend dependencies
+        working-directory: frontend/domain-watcher-box
+        run: npm ci
+
+      - name: Run Doc Specs (pure-web) with Mochawesome
+        working-directory: frontend/domain-watcher-box
+        run: |
+          npx -y start-server-and-test "npm run dev" http://localhost:5174 "cypress run --spec 'cypress/e2e/configure_timeouts.pw.cy.js,cypress/e2e/export_dropdown.pw.cy.js' --env screenshots=true --env mochawesome=true"
+          npm run report:merge || true
+          npm run report:generate || true
+
+      - name: Upload Consolidated HTML Report (pure-web doc)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dexteri-e2e-report-pure-web-doc
+          path: frontend/domain-watcher-box/cypress/reports/*.html
+
+      - name: Run Cypress UI specs (.cy.js only)
+        working-directory: frontend/domain-watcher-box
+        run: |
+          npx -y start-server-and-test "npm run dev" http://localhost:5174 "cypress run --spec 'cypress/e2e/**/*.cy.js' --env screenshots=true"
+
+      - name: Upload Cypress screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-screenshots-pure-web
+          path: frontend/domain-watcher-box/cypress/screenshots
+
+      - name: Upload Cypress videos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-videos-pure-web
+          path: frontend/domain-watcher-box/cypress/videos
+
+      - name: Merge Mochawesome JSON (pure web)
+        if: always()
+        working-directory: frontend/domain-watcher-box
+        run: |
+          npm run report:merge || true
+          npm run report:generate || true
+
+      - name: Upload Consolidated HTML Report (pure web)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dexteri-e2e-report-pure-web
+          path: frontend/domain-watcher-box/cypress/reports/*.html
+
+  cypress-e2e-tauri:
+    name: Cypress BDD (tauri)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Setup Rust
+        uses: actions/setup-rust@v1
+
+      - name: Start Tauri app
+        run: |
+          DEXTERI_TEST_DELAY_B_VULN_MS=5000 cargo tauri dev &
+          sleep 30
+
+      - name: Install frontend dependencies
+        working-directory: frontend/domain-watcher-box
+        run: npm ci
+
+      - name: Run Cypress BDD (@tauri or @sequential)
+        working-directory: frontend/domain-watcher-box
+        env:
+          CYPRESS_TAGS: "@tauri or @sequential"
+        run: |
+          npm run test:e2e:server -- --env tauri=true -- --env TAGS="@tauri or @sequential" -- --env screenshots=true
+
+      - name: Upload Cypress screenshots (tauri)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-screenshots-tauri
+          path: frontend/domain-watcher-box/cypress/screenshots
+
+      - name: Upload Cypress videos (tauri)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-videos-tauri
+          path: frontend/domain-watcher-box/cypress/videos
+
+      - name: Merge Mochawesome JSON (tauri)
+        if: always()
+        working-directory: frontend/domain-watcher-box
+        run: |
+          npm run report:merge || true
+          npm run report:generate || true
+
+      - name: Upload Consolidated HTML Report (tauri)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dexteri-e2e-report-tauri
+          path: frontend/domain-watcher-box/cypress/reports/*.html

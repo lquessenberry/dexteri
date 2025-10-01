@@ -9,6 +9,34 @@ pub struct LinkError {
     pub external: bool,
 }
 
+// ---- A/B/C progress & results ----
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AbcProgress {
+    pub a: CrawlProgress,
+    pub b: CrawlProgress,
+    pub c: CrawlProgress,
+    pub combined_pct: u8,
+}
+
+impl Default for AbcProgress {
+    fn default() -> Self {
+        AbcProgress {
+            a: CrawlProgress { pages_crawled: 0, links_checked: 0, queue_size: 0, in_flight: 0, broken_links: 0 },
+            b: CrawlProgress { pages_crawled: 0, links_checked: 0, queue_size: 0, in_flight: 0, broken_links: 0 },
+            c: CrawlProgress { pages_crawled: 0, links_checked: 0, queue_size: 0, in_flight: 0, broken_links: 0 },
+            combined_pct: 0,
+        }
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AbcResult {
+    pub ab: Option<AbResult>,
+    pub ac: Option<AbResult>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarketingSignals {
     pub json_ld_blocks: usize,

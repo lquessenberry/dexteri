@@ -5,10 +5,10 @@
     "version": "0.1.0"
   },
   "build": {
-    "beforeBuildCommand": "",
-    "beforeDevCommand": "",
-    "devPath": "assets",
-    "distDir": "assets",
+    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run dev",
+    "devPath": "http://localhost:5174",
+    "distDir": "frontend/domain-watcher-box/dist",
     "withGlobalTauri": true
   },
   "tauri": {
@@ -28,8 +28,11 @@
       }
     ],
     "bundle": {
-      "active": false,
-      "identifier": "com.dexteri.app"
+      "active": true,
+      "identifier": "com.dexteri.app",
+      "icon": [
+        "icons/icon.png"
+      ]
     },
     "security": {
       "csp": "default-src 'self' data: blob: 'unsafe-inline' 'unsafe-eval'"

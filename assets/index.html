@@ -11,12 +11,16 @@
     .topbar{display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;background:linear-gradient(90deg,rgba(14,20,38,.85),rgba(14,20,38,.65));border-bottom:1px solid var(--border)}
     .topbar h1{margin:0;font-size:1.05rem;letter-spacing:.3px}
     .controls{display:grid;gap:.75rem;grid-template-columns:repeat(12,1fr);padding:1rem;border-bottom:1px solid var(--border);background:linear-gradient(90deg,rgba(16,24,42,.65),rgba(16,24,42,.35))}
+    .controls details{grid-column:span 12}
+    .controls summary{cursor:pointer;color:var(--muted);user-select:none}
+    .adv-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:.75rem;margin-top:.5rem}
     .cell{display:flex;flex-direction:column;gap:.35rem}
     label{font-size:.82rem;color:var(--muted)}
     input[type=text],input[type=number]{width:100%;padding:.55rem .65rem;border-radius:8px;border:1px solid var(--border);background:#0a1020;color:var(--text)}
     input[type=checkbox]{transform:scale(1.05)}
     button,.btn{background:linear-gradient(135deg,#22c55e,#16a34a);border:none;color:#05210d;padding:.6rem .85rem;border-radius:10px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem}
     .btn.secondary{background:linear-gradient(135deg,#60a5fa,#3b82f6);color:#05152b}
+    .btn.ghost{background:transparent;border:1px solid var(--border);color:#cfe6ff}
     .status{display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;padding:1rem;background:linear-gradient(90deg,rgba(10,16,32,.35),rgba(10,16,32,.15))}
     .kpi{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:.8rem}
     .kpi b{display:block;color:var(--muted);font-weight:600}
@@ -26,6 +30,8 @@
     .tab{padding:.45rem .8rem;border:1px solid var(--border);border-radius:999px;background:#0f1526;color:#b9d5f3;cursor:pointer}
     .tab.active{background:linear-gradient(135deg,#6EE7B7,#93c5fd);color:#05152b;border-color:transparent}
     .table-wrap{width:100vw;overflow:auto;padding:1rem}
+    .wrap{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:1rem}
     table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
     thead th{position:sticky;top:0;background:#0f172a;border-bottom:1px solid var(--border);z-index:1;user-select:none}
     th,td{padding:.5rem .6rem;border-right:1px solid var(--border)}
@@ -47,6 +53,8 @@
     .bar{height:100%;width:0%;background:linear-gradient(90deg,#60a5fa,#06b6d4);transition:width .3s ease}
     .logs{padding:0 1rem 1rem 1rem}
     .logs pre{background:#0a1020;border:1px solid var(--border);border-radius:10px;padding:.75rem;max-height:240px;overflow:auto;color:#cbd5e1}
+    .logs .toolbar{display:flex;align-items:center;gap:.6rem;padding:.35rem 0}
+    .logs .toolbar input[type=text]{padding:.35rem .5rem;border-radius:6px;border:1px solid var(--border);background:#0a1020;color:#cbd5e1;min-width:260px}
     .modal-backdrop{position:fixed;inset:0;background:rgba(5,10,20,.7);display:flex;align-items:center;justify-content:center;z-index:20}
     .modal{background:#0f1526;border:1px solid var(--border);border-radius:12px;max-width:860px;width:92vw;max-height:80vh;overflow:auto;color:#dbe7f5;box-shadow:0 20px 60px rgba(0,0,0,.5)}
     .modal header{display:flex;align-items:center;gap:.5rem;padding:1rem;border-bottom:1px solid var(--border)}
@@ -72,22 +80,31 @@
   <div class="progress" id="progress" style="display:none"><div class="bar"></div></div>
 
   <form id="f" class="controls">
-    <div class="cell" style="grid-column:span 3"><label>URL</label><input id="url" type="text" placeholder="https://example.com" required></div>
-    <div class="cell" style="grid-column:span 2"><label>Host (optional)</label><input id="host" type="text" placeholder="example.com"></div>
+    <div class="cell" style="grid-column:span 6"><label>URL A (baseline)</label><input id="url" type="text" placeholder="https://example.com" required></div>
+    <div class="cell" id="url_b_wrap" style="grid-column:span 6; display:none"><label>URL B (optional)</label><input id="url_b" type="text" placeholder="https://competitor-one.com"></div>
+    <div class="cell" id="url_c_wrap" style="grid-column:span 6; display:none"><label>URL C (optional)</label><input id="url_c" type="text" placeholder="https://competitor-two.com"></div>
     <div class="cell"><label>Depth</label><input id="depth" type="number" min="0" value="2"></div>
-    <div class="cell"><label>HTTP Concurrency</label><input id="concurrency" type="number" min="1" value="32"></div>
-    <div class="cell"><label>Requests per second (optional)</label><input id="rate_limit_rps" type="number" min="1" placeholder="unset"></div>
-    <div class="cell" style="grid-column:span 2"><label>Port Spec</label><input id="ports" type="text" placeholder="1-1024,3306,5432"></div>
-    <div class="cell"><label>Port Concurrency</label><input id="port_concurrency" type="number" min="1" value="512"></div>
-    <div class="cell"><label>Port Timeout (ms)</label><input id="timeout_ms" type="number" min="100" value="800"></div>
-    <div class="cell" style="display:flex;align-items:center;gap:.5rem"><input id="externals" type="checkbox"><label style="margin:0">Validate external links</label></div>
-    <div class="cell" style="display:flex;align-items:center;gap:.5rem"><input id="include_subdomains" type="checkbox"><label style="margin:0">Include subdomains</label></div>
-    <div class="cell" style="display:flex;align-items:center;gap:.5rem"><input id="ab_mode" type="checkbox" onchange="toggleAb()"><label style="margin:0">Compare two sites (A/B)</label></div>
-    <div class="cell" id="url_b_wrap" style="grid-column:span 3; display:none"><label>URL B</label><input id="url_b" type="text" placeholder="https://competitor.com"></div>
+    <div class="cell"><label>HTTP Concurrency (auto)</label><input id="concurrency" type="number" value="32" disabled></div>
     <div class="cell" style="display:flex;align-items:flex-end;gap:.5rem">
-      <button id="run" type="submit" disabled>Run All</button>
+      <button id="addB" type="button" class="btn ghost">+ Add Site B</button>
+      <button id="addC" type="button" class="btn ghost">+ Add Site C</button>
+      <span style="flex:1"></span>
+      <button id="run" type="submit" disabled>Run</button>
       <button id="stop" type="button" class="btn ghost" disabled>Stop</button>
     </div>
+    <details>
+      <summary>Advanced settings</summary>
+      <div class="adv-grid">
+        <div class="cell" style="grid-column:span 4"><label>Host (optional)</label><input id="host" type="text" placeholder="example.com"></div>
+        <div class="cell" style="grid-column:span 3"><label>Requests per second (optional)</label><input id="rate_limit_rps" type="number" min="1" placeholder="unset"></div>
+        <div class="cell" style="grid-column:span 5"><label>Port Spec</label><input id="ports" type="text" placeholder="1-1024,3306,5432"></div>
+        <div class="cell"><label>Port Concurrency</label><input id="port_concurrency" type="number" min="1" value="512"></div>
+        <div class="cell"><label>Port Timeout (ms)</label><input id="timeout_ms" type="number" min="100" value="800"></div>
+        <div class="cell"><label>Multi Timeout (secs)</label><input id="ab_timeout_secs" type="number" min="10" value="180"></div>
+        <div class="cell" style="display:flex;align-items:center;gap:.5rem"><input id="externals" type="checkbox"><label style="margin:0">Validate external links</label></div>
+        <div class="cell" style="display:flex;align-items:center;gap:.5rem"><input id="include_subdomains" type="checkbox"><label style="margin:0">Include subdomains</label></div>
+      </div>
+    </details>
     <div class="cell" style="grid-column:span 12"><span id="error" class="err"></span></div>
   </form>
 
@@ -111,6 +128,8 @@
     <button class="btn secondary" id="exportJson" type="button">Export JSON</button>
     <button class="btn secondary" id="exportXml" type="button">Export XML</button>
     <button class="btn secondary" id="exportHtml" type="button">Export HTML</button>
+    <button class="btn secondary" id="exportAbHtml" type="button" title="Export A/B Diff as HTML" disabled>Export A/B Diff</button>
+    <button class="btn secondary" id="exportAcHtml" type="button" title="Export A/C Diff as HTML" disabled>Export A/C Diff</button>
     <button class="btn secondary" id="saveReport" type="button">Save Report…</button>
     <button class="btn ghost" id="openWebUi" type="button" title="Start and open the Web UI">Open Web UI</button>
     <button class="btn secondary" id="exportCsv" type="button" title="Exports current tab">Export CSV</button>
@@ -118,6 +137,10 @@
     <button class="btn ghost" id="saveQa" type="button" title="Save QA package (events+screens)">Save QA Package</button>
   </div>
 
+  <div style="display:flex;align-items:center;gap:.5rem;padding:0 1rem;margin-top:.5rem">
+    <b class="muted">Site:</b>
+    <div id="siteSelector" style="display:flex;gap:.35rem"></div>
+  </div>
   <div class="table-wrap" id="tableHost">
     <table id="dataTable">
       <thead></thead>
@@ -126,6 +149,10 @@
   </div>
 
   <script>
+    function esc(s){
+      s = (s==null? '': ''+s);
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
     async function invoke(cmd, args){
       const get = ()=> window.__TAURI__ && (window.__TAURI__.invoke || (window.__TAURI__.tauri && window.__TAURI__.tauri.invoke));
       let inv = get();
@@ -145,6 +172,8 @@
     const lastUpdate = () => document.getElementById('lastUpdate');
     const progressBar = () => document.querySelector('#progress .bar');
 
+    let logsFilter = '';
+    let logsAuto = true;
     function saveParams(){
       const params = {
         url: document.getElementById('url').value,
@@ -155,6 +184,7 @@
         ports: document.getElementById('ports').value,
         port_concurrency: document.getElementById('port_concurrency').value,
         timeout_ms: document.getElementById('timeout_ms').value,
+        ab_timeout_secs: document.getElementById('ab_timeout_secs').value,
         externals: document.getElementById('externals').checked,
         include_subdomains: document.getElementById('include_subdomains').checked,
         ab_mode: document.getElementById('ab_mode').checked,
@@ -170,16 +200,18 @@
         const set=(id,val)=>{ const el=document.getElementById(id); if(el==null||val==null) return; if(el.type==='checkbox') el.checked = !!val; else el.value = val; };
         set('url', p.url); set('host', p.host); set('depth', p.depth); set('concurrency', p.concurrency);
         set('rate_limit_rps', p.rate_limit_rps); set('ports', p.ports); set('port_concurrency', p.port_concurrency); set('timeout_ms', p.timeout_ms);
+        set('ab_timeout_secs', p.ab_timeout_secs);
         set('externals', p.externals); set('include_subdomains', p.include_subdomains);
         set('ab_mode', p.ab_mode); set('url_b', p.url_b);
         toggleAb();
       }catch(e){}
     }
 
-    function toggleAb(){
-      const on = document.getElementById('ab_mode').checked;
-      const wrap = document.getElementById('url_b_wrap');
-      wrap.style.display = on ? '' : 'none';
+    function toggleInputs(){
+      const b = (document.getElementById('url_b').value||'').trim().length>0;
+      const c = (document.getElementById('url_c').value||'').trim().length>0;
+      document.getElementById('url_b_wrap').style.display = b ? '' : 'none';
+      document.getElementById('url_c_wrap').style.display = c ? '' : 'none';
     }
 
     function v(id){ const el=document.getElementById(id); if(!el) return undefined; const x=(el.value||'').trim(); return x||undefined; }
@@ -200,21 +232,23 @@
         ports: v('ports'), port_concurrency: num('port_concurrency'), timeout_ms: num('timeout_ms')
       };
       try{
-        const ab = document.getElementById('ab_mode').checked;
-        if(ab){
-          const payloadB = { ...payload, url: v('url_b') };
-          payloadB.rate_limit_rps = num('rate_limit_rps');
-          await invoke('run_ab', { params: { a: payload, b: payloadB } });
-        }else{
-          await invoke('run_all', { params: payload });
-        }
+        const vb = v('url_b');
+        const vc = v('url_c');
+        const payloadB = vb ? { ...payload, url: vb } : undefined;
+        const payloadC = vc ? { ...payload, url: vc } : undefined;
+        await invoke('run_multi', { params: { a: payload, b: payloadB, c: payloadC, timeout_secs: num('ab_timeout_secs') } });
+        // build site selector
+        sitesAvailable = { A:true, B:!!vb, C:!!vc };
+        currentSite = 'A';
+        buildSiteSelector();
         isRunning = true;
         document.getElementById('phase').textContent='starting';
         runBtn().disabled = true; runBtn().textContent = 'Running...';
         stopBtn().disabled = false;
         runDot().classList.add('running'); runText().textContent = 'Running'; progress().style.display='block';
         if(pollHandle) clearInterval(pollHandle);
-        pollHandle = setInterval(poll, 500);
+        await poll();
+        pollHandle = setInterval(poll, 5000);
       }catch(e){ document.getElementById('error').textContent = String(e); }
     }
 
@@ -259,11 +293,16 @@
         lastUpdate().textContent = new Date().toLocaleTimeString();
         await renderLogs();
         await updateWebUiLink();
+        // Enable Export A/B Diff button when result is available
+        try{
+          const btn = document.getElementById('exportAbHtml');
+          if(btn){ const abr = await invoke('get_ab_result'); btn.disabled = !abr; }
+        }catch(e){ /* ignore */ }
         if(st.done){
           clearInterval(pollHandle);
           isRunning = false;
           await loadResults();
-          try{ runBtn().disabled = false; runBtn().textContent = 'Run All'; }catch(e){}
+          try{ runBtn().disabled = false; runBtn().textContent = 'Run'; }catch(e){}
           runDot().classList.remove('running');
           runText().textContent = 'Idle';
           progress().style.display = 'none';
@@ -274,37 +313,53 @@
       }catch(e){ console.error(e); }
     }
 
-    async function loadAbResult(){
+    async function loadCompare(){
       try{
-        const ab = await invoke('get_ab_result');
-        if(!ab) return;
+        const abc = await invoke('get_abc_result');
+        if(!abc) return;
         const host = document.getElementById('tableHost');
         if(currentView !== 'compare') return;
-        const html = renderCompare(ab);
-        host.innerHTML = `<div style="padding:1rem">${html}</div>`;
+        let html = '';
+        if(abc.ab){ html += `<div class="card"><h3>A vs B</h3>${renderComparePair(abc.ab)}</div>`; }
+        if(abc.ac){ html += `<div class="card" style="margin-top:1rem"><h3>A vs C</h3>${renderComparePair(abc.ac)}</div>`; }
+        host.innerHTML = `<div style="padding:1rem">${html||'<div class="muted">No comparisons available</div>'}</div>`;
       }catch(e){ console.error(e); }
     }
 
-    function renderCompare(ab){
-      const s = ab.diff.signals_delta;
-      const broken = ab.diff.broken_delta;
-      const tracks = (ab.diff.signals_delta.top_trackers||[]).slice(0,10).map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+    function renderComparePair(ab){
+      const d = ab.diff || {};
+      const s = d.signals_delta || {};
+      const aOnly = (d.url_only_in_a||[]).slice(0,50);
+      const bOnly = (d.url_only_in_b||[]).slice(0,50);
+      const broken = d.broken_delta||[0,0];
+      const tracks = (s.top_trackers||[]).slice(0,20).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v}</td></tr>`).join('');
       return `
-        <h3>Signals Delta (A - B)</h3>
-        <table><thead><tr><th>Metric</th><th>Delta</th></tr></thead>
-          <tbody>
-            <tr><td>JSON-LD blocks</td><td>${s.json_ld_blocks}</td></tr>
-            <tr><td>Microdata items</td><td>${s.microdata_items}</td></tr>
-            <tr><td>OpenGraph tags</td><td>${s.og_tags}</td></tr>
-            <tr><td>Twitter tags</td><td>${s.twitter_tags}</td></tr>
-            <tr><td>Robots pages</td><td>${s.robots_pages}</td></tr>
-            <tr><td>Canonical pages</td><td>${s.canonical_pages}</td></tr>
-            <tr><td>Hreflang total</td><td>${s.hreflang_total}</td></tr>
-            <tr><td>Broken links (A, B)</td><td>${broken[0]} vs ${broken[1]}</td></tr>
-          </tbody>
-        </table>
-        <h3 style="margin-top:1rem">Top Tracker Deltas</h3>
-        <table><thead><tr><th>Tracker</th><th>A - B</th></tr></thead><tbody>${tracks||'<tr><td colspan="2">None</td></tr>'}</tbody></table>
+        <div class="wrap">
+          <div class="card"><h3>Summary</h3>
+            <table>
+              <tr><th>URLs only in A</th><td>${aOnly.length}</td></tr>
+              <tr><th>URLs only in B</th><td>${bOnly.length}</td></tr>
+              <tr><th>Broken (A)</th><td>${broken[0]}</td></tr>
+              <tr><th>Broken (B)</th><td>${broken[1]}</td></tr>
+            </table>
+          </div>
+          <div class="card"><h3>Signals Delta (A - B)</h3>
+            <table>
+              <tr><th>JSON-LD</th><td>${s.json_ld_blocks||0}</td></tr>
+              <tr><th>Microdata</th><td>${s.microdata_items||0}</td></tr>
+              <tr><th>OpenGraph</th><td>${s.og_tags||0}</td></tr>
+              <tr><th>Twitter</th><td>${s.twitter_tags||0}</td></tr>
+              <tr><th>Robots pages</th><td>${s.robots_pages||0}</td></tr>
+              <tr><th>Canonical pages</th><td>${s.canonical_pages||0}</td></tr>
+              <tr><th>Hreflang total</th><td>${s.hreflang_total||0}</td></tr>
+            </table>
+          </div>
+        </div>
+        <div class="wrap">
+          <div class="card"><h3>URLs only in A</h3><div class="muted">Top 50</div><ul>${aOnly.map(u=>`<li>${esc(u)}</li>`).join('')||'<li>None</li>'}</ul></div>
+          <div class="card"><h3>URLs only in B</h3><div class="muted">Top 50</div><ul>${bOnly.map(u=>`<li>${esc(u)}</li>`).join('')||'<li>None</li>'}</ul></div>
+        </div>
+        <div class="card"><h3>Top Tracker Deltas (A - B)</h3><table><thead><tr><th>Tracker</th><th>Delta</th></tr></thead><tbody>${tracks||'<tr><td colspan="2">None</td></tr>'}</tbody></table></div>
       `;
     }
 
@@ -321,7 +376,8 @@
 
     async function loadResults(){
       try{
-        cachedResults = await invoke('get_results');
+        const fn = currentSite==='A' ? 'get_results' : (currentSite==='B' ? 'get_results_b' : 'get_results_c');
+        cachedResults = await invoke(fn);
         renderTable();
       }catch(e){ console.error(e); }
     }
@@ -381,14 +437,71 @@
     async function openUrl(u){ try { await invoke('open_in_browser', { url: u }); } catch(e){ console.error(e); } }
     async function copyText(t){ try{ await navigator.clipboard.writeText(t); }catch(e){ console.error(e); } }
 
+    async function updateWebUiLink(){
+      // optional enhancement: get_web_ui_url and show link if running
+      try{ await invoke('get_web_ui_url'); }catch(e){ /* ignore */ }
+    }
+
+    // minimal QA scaffolding to avoid runtime errors
+    const qa = { enabled: false, async capture(){ /* no-op */ } };
+
+    function buildAbDiffHtml(ab){
+      const a_url = document.getElementById('url').value || 'A';
+      const b_url = document.getElementById('url_b').value || 'B';
+      const d = ab?.diff || {};
+      const s = d.signals_delta || {};
+      const top = (s.top_trackers||[]).slice(0,50);
+      let html = '';
+      html += '<!doctype html><html><head><meta charset="utf-8"/><title>Dexteri++ A/B Diff</title>';
+      html += '<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu;margin:1rem;background:#0b1020;color:#e6edf3} .wrap{display:grid;grid-template-columns:1fr 1fr;gap:1rem} .card{background:#121a2d;border:1px solid #1e2a47;border-radius:12px;padding:1rem} h2,h3{margin:.2rem 0} table{width:100%;border-collapse:collapse} td,th{border-bottom:1px solid #1e2a47;padding:.35rem .5rem;text-align:left} .muted{color:#9fb1c5}</style></head><body>';
+      html += `<h2>Dexteri++ A/B Comparison</h2><div class=muted>A: ${esc(a_url)} &nbsp; vs &nbsp; B: ${esc(b_url)}</div>`;
+      html += '<div class=wrap>';
+      html += '<div class=card><h3>Summary</h3><table>';
+      html += `<tr><th>URLs only in A</th><td>${(d.url_only_in_a||[]).length}</td></tr>`;
+      html += `<tr><th>URLs only in B</th><td>${(d.url_only_in_b||[]).length}</td></tr>`;
+      const broken = d.broken_delta||[0,0];
+      html += `<tr><th>Broken (A)</th><td>${broken[0]}</td></tr>`;
+      html += `<tr><th>Broken (B)</th><td>${broken[1]}</td></tr>`;
+      html += '</table></div>';
+      html += '<div class=card><h3>Signals Delta (A - B)</h3><table>';
+      html += `<tr><th>JSON-LD</th><td>${s.json_ld_blocks||0}</td></tr>`;
+      html += `<tr><th>Microdata</th><td>${s.microdata_items||0}</td></tr>`;
+      html += `<tr><th>OpenGraph</th><td>${s.og_tags||0}</td></tr>`;
+      html += `<tr><th>Twitter</th><td>${s.twitter_tags||0}</td></tr>`;
+      html += `<tr><th>Robots pages</th><td>${s.robots_pages||0}</td></tr>`;
+      html += `<tr><th>Canonical pages</th><td>${s.canonical_pages||0}</td></tr>`;
+      html += `<tr><th>Hreflang total</th><td>${s.hreflang_total||0}</td></tr>`;
+      html += '</table></div>';
+      html += '</div>';
+      html += '<div class=wrap>';
+      html += '<div class=card><h3>URLs only in A</h3><div class=muted>Top 50</div><ul>';
+      for(const u of (d.url_only_in_a||[]).slice(0,50)) html += `<li>${esc(u)}</li>`;
+      html += '</ul></div>';
+      html += '<div class=card><h3>URLs only in B</h3><div class=muted>Top 50</div><ul>';
+      for(const u of (d.url_only_in_b||[]).slice(0,50)) html += `<li>${esc(u)}</li>`;
+      html += '</ul></div>';
+      html += '</div>';
+      html += '<div class=card><h3>Top Tracker Deltas (A - B)</h3><table><thead><tr><th>Tracker</th><th>Delta</th></tr></thead><tbody>';
+      for(const [k,v] of top){ html += `<tr><td>${esc(k)}</td><td>${v}</td></tr>`; }
+      html += '</tbody></table></div>';
+      html += '</body></html>';
+      return html;
+    }
+
     let qaLastLogCount = 0;
     async function renderLogs(){
       try{
         const lines = await invoke('get_logs');
         const pre = document.getElementById('logPre');
         if(!pre) return;
-        const autoScroll = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
-        const out = (lines||[]);
+        const wasAtBottom = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
+        let out = (lines||[]);
+        // optional filter
+        const q = (logsFilter||'').trim();
+        if(q){
+          let re=null; try{ re = new RegExp(q, 'i'); }catch(_){ re = null; }
+          out = out.filter(l => re ? re.test(l) : (l||'').toLowerCase().includes(q.toLowerCase()));
+        }
         // QA: detect new error-like lines and capture screenshots, limited per poll
         if(qa.enabled){
           const maxShots = 3;
@@ -403,7 +516,7 @@
           qaLastLogCount = out.length;
         }
         pre.textContent = out.slice(-500).join('\n');
-        if(autoScroll) pre.scrollTop = pre.scrollHeight;
+        if(logsAuto || wasAtBottom) pre.scrollTop = pre.scrollHeight;
       }catch(e){ /* no-op */ }
     }
 
@@ -605,9 +718,25 @@
     }
 
     document.getElementById('f').addEventListener('submit', runAll);
-    document.getElementById('exportJson').addEventListener('click', async ()=>{ try{ const [n,m,c]=await invoke('export_data',{format:'json'}); download(n,m,c);}catch(e){console.error(e);} });
-    document.getElementById('exportXml').addEventListener('click', async ()=>{ try{ const [n,m,c]=await invoke('export_data',{format:'xml'}); download(n,m,c);}catch(e){console.error(e);} });
-    document.getElementById('exportHtml').addEventListener('click', async ()=>{ try{ const [n,m,c]=await invoke('export_data',{format:'html'}); download(n,m,c);}catch(e){console.error(e);} });
+    document.getElementById('exportJson').addEventListener('click', async ()=>{ try{ const [n,m,c]=await invoke('export_data_for',{format:'json', site: currentSite}); download(n,m,c);}catch(e){console.error(e);} });
+    document.getElementById('exportXml').addEventListener('click', async ()=>{ try{ const [n,m,c]=await invoke('export_data_for',{format:'xml', site: currentSite}); download(n,m,c);}catch(e){console.error(e);} });
+    document.getElementById('exportHtml').addEventListener('click', async ()=>{ try{ const [n,m,c]=await invoke('export_data_for',{format:'html', site: 'A'}); download(n,m,c);}catch(e){console.error(e);} });
+    document.getElementById('exportAbHtml').addEventListener('click', async ()=>{
+      try{
+        const abc = await invoke('get_abc_result');
+        if(!abc || !abc.ab){ return; }
+        const html = buildAbDiffHtml(abc.ab);
+        download('dexteri-ab-diff.html', 'text/html', html);
+      }catch(e){ console.error(e); }
+    });
+    document.getElementById('exportAcHtml').addEventListener('click', async ()=>{
+      try{
+        const abc = await invoke('get_abc_result');
+        if(!abc || !abc.ac){ return; }
+        const html = buildAbDiffHtml(abc.ac);
+        download('dexteri-ac-diff.html', 'text/html', html);
+      }catch(e){ console.error(e); }
+    });
     document.getElementById('saveReport').addEventListener('click', async ()=>{
       try{
         const api = window.__TAURI__;
@@ -632,6 +761,12 @@
       const m = {pages:'pages', broken:'broken_links', ports:'ports', findings:'findings', signals:'signals', security:'security'}; exportKind(m[currentView]||'pages');
     });
     document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>setTab(t.dataset.view)));
+    document.getElementById('logFilter').addEventListener('input', (e)=>{ logsFilter = e.target.value||''; renderLogs(); });
+    document.getElementById('logAuto').addEventListener('change', (e)=>{ logsAuto = !!e.target.checked; });
+    document.getElementById('logClear').addEventListener('click', async ()=>{ try{ await invoke('clear_logs'); }catch(e){}; const pre=document.getElementById('logPre'); if(pre) pre.textContent=''; qaLastLogCount=0; });
+    const qaModeEl = document.getElementById('qaMode'); if(qaModeEl){ qaModeEl.addEventListener('change', (e)=>{ qa.enabled = !!e.target.checked; }); }
+    document.getElementById('addB').addEventListener('click', ()=>{ document.getElementById('url_b_wrap').style.display=''; });
+    document.getElementById('addC').addEventListener('click', ()=>{ document.getElementById('url_c_wrap').style.display=''; });
 
     loadParams();
     (async()=>{
@@ -643,13 +778,31 @@
         if(inv){ runBtn().disabled = false; runText().textContent = 'Idle'; }
         // try preloading results
         const r = await invoke('get_results'); if(r){ cachedResults=r; renderTable(); }
-        try{ await loadAbResult(); }catch(e){}
+        try{ await loadCompare(); }catch(e){}
       }catch(e){ /* ignore on startup */ }
     })();
   </script>
 
+  <div id="sigModal" class="modal-backdrop" style="display:none">
+    <div class="modal">
+      <header>
+        <div style="flex:1 1 auto"><b id="sigTitle"></b></div>
+        <button class="btn ghost" type="button" onclick="closeSignals()">Close</button>
+      </header>
+      <div class="body" id="sigBody"></div>
+      <footer>
+        <button class="btn ghost" type="button" onclick="closeSignals()">Close</button>
+      </footer>
+    </div>
+  </div>
+
   <div class="logs">
-    <b class="muted">Logs</b>
+    <div class="toolbar">
+      <b class="muted">Logs</b>
+      <input id="logFilter" type="text" placeholder="Filter logs (regex or text)">
+      <label class="muted" style="display:inline-flex;align-items:center;gap:.35rem"><input id="logAuto" type="checkbox" checked> Auto-scroll</label>
+      <button id="logClear" class="btn ghost" type="button">Clear</button>
+    </div>
     <pre id="logPre"></pre>
   </div>
 </body>

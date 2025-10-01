@@ -8,7 +8,8 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, RwLock};
+use tokio::time::{timeout, Duration};
 use url::Url;
 
 use crate::{crawler, models::*, ports, report, security, util, vuln};
@@ -33,6 +34,10 @@ struct InnerState {
     status: Option<RunStatus>,
     last_report_html: Option<String>,
     last_results: Option<CombinedResult>,
+    last_results_b: Option<CombinedResult>,
+    last_results_c: Option<CombinedResult>,
+    last_abc_result: Option<AbcResult>,
+    abc_progress: Option<AbcProgress>,
     error: Option<String>,
 }
 
@@ -67,6 +72,14 @@ struct RunAllParams {
     rate_limit_rps: Option<u32>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RunMultiParams {
+    a: RunAllParams,
+    b: Option<RunAllParams>,
+    c: Option<RunAllParams>,
+    timeout_secs: Option<u64>,
+}
+
 pub async fn serve(bind: SocketAddr) -> anyhow::Result<()> {
     let state = AppState::default();
 
@@ -76,11 +89,216 @@ pub async fn serve(bind: SocketAddr) -> anyhow::Result<()> {
         .route("/api/results.json", get(get_results_json))
         .route("/api/export", get(export_data))
         .route("/api/run/all", post(run_all))
+        .route("/api/run/multi", post(run_multi))
         .route("/report", get(get_report))
         .route("/charts", get(charts))
         .with_state(state);
 
     axum::serve(tokio::net::TcpListener::bind(bind).await?, app).await?;
+    Ok(())
+}
+
+async fn run_multi_pipeline(state: AppState, params: RunMultiParams) -> anyhow::Result<()> {
+    // Which sites are active
+    let has_b = params.b.as_ref().map(|p| !p.url.trim().is_empty()).unwrap_or(false);
+    let has_c = params.c.as_ref().map(|p| !p.url.trim().is_empty()).unwrap_or(false);
+
+    // Parse URLs
+    let a_url = Url::parse(&params.a.url).or_else(|_| Url::parse(&format!("http://{}", params.a.url)))?;
+    let b_url = if has_b {
+        let s = &params.b.as_ref().unwrap().url;
+        Some(Url::parse(s).or_else(|_| Url::parse(&format!("http://{}", s)))?)
+    } else { None };
+    let c_url = if has_c {
+        let s = &params.c.as_ref().unwrap().url;
+        Some(Url::parse(s).or_else(|_| Url::parse(&format!("http://{}", s)))?)
+    } else { None };
+
+    // Shared settings
+    let depth = params.a.depth.unwrap_or(2);
+    let externals = params.a.externals.unwrap_or(false);
+    let include_subdomains = params.a.include_subdomains.unwrap_or(false);
+    let global_cc = params.a.concurrency.unwrap_or(32);
+    let sites = 1 + (has_b as usize) + (has_c as usize);
+    let base = std::cmp::max(1usize, global_cc / sites);
+    let mut rem = global_cc.saturating_sub(base * sites);
+    let mut cc_a = base; if rem > 0 { cc_a += 1; rem -= 1; }
+    let mut cc_b = if has_b { base } else { 0 }; if has_b && rem > 0 { cc_b += 1; rem -= 1; }
+    let mut cc_c = if has_c { base } else { 0 }; if has_c && rem > 0 { cc_c += 1; }
+
+    let client = util::build_client()?;
+
+    // Start crawls concurrently (no logs, minimal progress)
+    {
+        let mut inner = state.inner.write().await;
+        inner.phase = "crawl".into();
+        if let Some(st) = inner.status.as_mut() { st.phase = "crawl".into(); }
+    }
+    let a_fut = crawler::crawl_with_logs(
+        &client, &a_url, depth, cc_a, externals, include_subdomains,
+        None, None, None, params.a.rate_limit_rps,
+    );
+    let b_fut = if has_b {
+        Some(crawler::crawl_with_logs(
+            &client, b_url.as_ref().unwrap(), depth, cc_b, externals, include_subdomains,
+            None, None, None, params.b.as_ref().and_then(|p| p.rate_limit_rps),
+        ))
+    } else { None };
+    let c_fut = if has_c {
+        Some(crawler::crawl_with_logs(
+            &client, c_url.as_ref().unwrap(), depth, cc_c, externals, include_subdomains,
+            None, None, None, params.c.as_ref().and_then(|p| p.rate_limit_rps),
+        ))
+    } else { None };
+
+    let timeout_secs = params.timeout_secs.unwrap_or(180);
+    let (a_crawl, b_crawl_opt, c_crawl_opt) = timeout(Duration::from_secs(timeout_secs), async {
+        if has_b && has_c {
+            let (ra, rb, rc) = tokio::try_join!(a_fut, b_fut.unwrap(), c_fut.unwrap())?;
+            anyhow::Ok((ra, Some(rb), Some(rc)))
+        } else if has_b {
+            let (ra, rb) = tokio::try_join!(a_fut, b_fut.unwrap())?;
+            anyhow::Ok((ra, Some(rb), None))
+        } else if has_c {
+            let (ra, rc) = tokio::try_join!(a_fut, c_fut.unwrap())?;
+            anyhow::Ok((ra, None, Some(rc)))
+        } else {
+            let ra = a_fut.await?;
+            anyhow::Ok((ra, None, None))
+        }
+    }).await??;
+
+    // Ports phase
+    {
+        let mut inner = state.inner.write().await;
+        inner.phase = "ports".into();
+        if let Some(st) = inner.status.as_mut() { st.phase = "ports".into(); }
+    }
+
+    // Helper to build per-site port settings and host
+    let mut total_ports_open = 0usize;
+    let mut total_ports_scanned = 0usize;
+    let host_a = params.a.host.clone().unwrap_or_else(|| util::host_from_url(&a_url).unwrap_or_else(|| "localhost".to_string()));
+    let ports_a = params.a.ports.as_deref().map(ports::parse_ports).transpose()?.unwrap_or_else(ports::common_ports);
+    let pc_a = params.a.port_concurrency.unwrap_or(512);
+    let to_a = params.a.timeout_ms.unwrap_or(800);
+    let ports_res_a = ports::scan_host(&host_a, &ports_a, pc_a, to_a, None).await?;
+    total_ports_open += ports_res_a.open_ports.len();
+    total_ports_scanned += ports_res_a.scanned;
+
+    let (ports_res_b, host_b) = if let (true, Some(bu)) = (has_b, b_url.as_ref()) {
+        let host = params.b.as_ref().and_then(|p| p.host.clone()).unwrap_or_else(|| util::host_from_url(bu).unwrap_or_else(|| "localhost".to_string()));
+        let pv = params.b.as_ref().and_then(|p| p.ports.as_deref().map(ports::parse_ports).transpose().ok()).flatten().unwrap_or_else(ports::common_ports);
+        let pc = params.b.as_ref().and_then(|p| p.port_concurrency).unwrap_or(512);
+        let to = params.b.as_ref().and_then(|p| p.timeout_ms).unwrap_or(800);
+        let pr = ports::scan_host(&host, &pv, pc, to, None).await?;
+        total_ports_open += pr.open_ports.len();
+        total_ports_scanned += pr.scanned;
+        (Some(pr), Some(host))
+    } else { (None, None) };
+
+    let (ports_res_c, host_c) = if let (true, Some(cu)) = (has_c, c_url.as_ref()) {
+        let host = params.c.as_ref().and_then(|p| p.host.clone()).unwrap_or_else(|| util::host_from_url(cu).unwrap_or_else(|| "localhost".to_string()));
+        let pv = params.c.as_ref().and_then(|p| p.ports.as_deref().map(ports::parse_ports).transpose().ok()).flatten().unwrap_or_else(ports::common_ports);
+        let pc = params.c.as_ref().and_then(|p| p.port_concurrency).unwrap_or(512);
+        let to = params.c.as_ref().and_then(|p| p.timeout_ms).unwrap_or(800);
+        let pr = ports::scan_host(&host, &pv, pc, to, None).await?;
+        total_ports_open += pr.open_ports.len();
+        total_ports_scanned += pr.scanned;
+        (Some(pr), Some(host))
+    } else { (None, None) };
+
+    {
+        let mut inner = state.inner.write().await;
+        if let Some(st) = inner.status.as_mut() {
+            st.ports_open = total_ports_open;
+            st.ports_scanned = total_ports_scanned;
+        }
+    }
+
+    // Vuln phase
+    {
+        let mut inner = state.inner.write().await;
+        inner.phase = "vuln".into();
+        if let Some(st) = inner.status.as_mut() { st.phase = "vuln".into(); }
+    }
+    let vuln_a = vuln::scan(&client, &a_url).await?;
+    let vuln_b = if has_b { Some(vuln::scan(&client, b_url.as_ref().unwrap()).await?) } else { None };
+    let vuln_c = if has_c { Some(vuln::scan(&client, c_url.as_ref().unwrap()).await?) } else { None };
+    let mut total_findings = vuln_a.findings.len();
+    if let Some(v) = &vuln_b { total_findings += v.findings.len(); }
+    if let Some(v) = &vuln_c { total_findings += v.findings.len(); }
+    {
+        let mut inner = state.inner.write().await;
+        if let Some(st) = inner.status.as_mut() { st.vuln_findings = total_findings; }
+    }
+
+    // Security phase
+    {
+        let mut inner = state.inner.write().await;
+        inner.phase = "security".into();
+        if let Some(st) = inner.status.as_mut() { st.phase = "security".into(); }
+    }
+    let sec_a = match security::check_security_posture(&client, &a_url).await { Ok(v) => v, Err(_) => Vec::new() };
+    let sec_b = if has_b {
+        match security::check_security_posture(&client, b_url.as_ref().unwrap()).await { Ok(v) => Some(v), Err(_) => Some(Vec::new()) }
+    } else { None };
+    let sec_c = if has_c {
+        match security::check_security_posture(&client, c_url.as_ref().unwrap()).await { Ok(v) => Some(v), Err(_) => Some(Vec::new()) }
+    } else { None };
+
+    // Report for A only
+    let tmp_name = format!("dexteri-report-{}.html", chrono::Local::now().format("%Y%m%d%H%M%S"));
+    let path = std::env::temp_dir().join(tmp_name);
+    report::write_report(
+        &path,
+        &a_url,
+        &a_crawl,
+        &ports_res_a,
+        &vuln_a,
+        &sec_a,
+    )?;
+    let html = tokio::fs::read_to_string(&path).await.unwrap_or_default();
+    let _ = tokio::fs::remove_file(&path).await;
+
+    // Save results to state
+    {
+        let mut inner = state.inner.write().await;
+        inner.last_report_html = Some(html);
+        inner.last_results = Some(CombinedResult { crawl: a_crawl.clone(), ports: ports_res_a.clone(), vuln: vuln_a.clone(), security: sec_a.clone() });
+        if let (true, Some(bc), Some(pr)) = (has_b, b_crawl_opt.as_ref(), ports_res_b.as_ref()) {
+            inner.last_results_b = Some(CombinedResult { crawl: bc.clone(), ports: pr.clone(), vuln: vuln_b.clone().unwrap_or(VulnReport{findings:vec![]}), security: sec_b.clone().unwrap_or_default() });
+        }
+        if let (true, Some(cc), Some(pr)) = (has_c, c_crawl_opt.as_ref(), ports_res_c.as_ref()) {
+            inner.last_results_c = Some(CombinedResult { crawl: cc.clone(), ports: pr.clone(), vuln: vuln_c.clone().unwrap_or(VulnReport{findings:vec![]}), security: sec_c.clone().unwrap_or_default() });
+        }
+    }
+
+    // Compute diffs A/B and A/C if available
+    if has_b || has_c {
+        let mut abc = AbcResult::default();
+        if let (true, Some(bc)) = (has_b, b_crawl_opt.as_ref()) {
+            abc.ab = Some(AbResult::compute(&a_crawl, bc));
+        }
+        if let (true, Some(cc)) = (has_c, c_crawl_opt.as_ref()) {
+            abc.ac = Some(AbResult::compute(&a_crawl, cc));
+        }
+        let mut inner = state.inner.write().await;
+        inner.last_abc_result = Some(abc);
+    }
+
+    // Update top-level counters (final)
+    {
+        let mut inner = state.inner.write().await;
+        if let Some(st) = inner.status.as_mut() {
+            let a = &a_crawl;
+            let (pb, pc) = (b_crawl_opt.as_ref(), c_crawl_opt.as_ref());
+            st.pages_crawled = a.pages_crawled + pb.map(|x| x.pages_crawled).unwrap_or(0) + pc.map(|x| x.pages_crawled).unwrap_or(0);
+            st.links_checked = a.links_checked + pb.map(|x| x.links_checked).unwrap_or(0) + pc.map(|x| x.links_checked).unwrap_or(0);
+            st.broken_links = a.broken_links.len() + pb.map(|x| x.broken_links.len()).unwrap_or(0) + pc.map(|x| x.broken_links.len()).unwrap_or(0);
+        }
+    }
+
     Ok(())
 }
 
@@ -105,9 +323,19 @@ async fn get_report(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
-async fn get_results_json(State(state): State<AppState>) -> impl IntoResponse {
+#[derive(Debug, Deserialize, Default)]
+struct ResultsQuery { site: Option<String> }
+
+async fn get_results_json(State(state): State<AppState>, Query(q): Query<ResultsQuery>) -> impl IntoResponse {
     let inner = state.inner.read().await;
-    if let Some(res) = &inner.last_results {
+    let site = q.site.as_deref().unwrap_or("A");
+    let opt = match site.to_ascii_uppercase().as_str() {
+        "A" => inner.last_results.as_ref(),
+        "B" => inner.last_results_b.as_ref(),
+        "C" => inner.last_results_c.as_ref(),
+        _ => inner.last_results.as_ref(),
+    };
+    if let Some(res) = opt {
         (StatusCode::OK, Json(res)).into_response()
     } else {
         (StatusCode::NOT_FOUND, "No results yet").into_response()
@@ -348,6 +576,81 @@ async fn run_all(
     let state_cl = state.clone();
     tokio::spawn(async move {
         let res = run_pipeline(state_cl.clone(), params).await;
+        let mut inner = state_cl.inner.write().await;
+        match res {
+            Ok(_) => {
+                if let Some(st) = inner.status.as_mut() {
+                    st.done = true;
+                    st.phase = "done".into();
+                }
+            }
+            Err(e) => {
+                inner.error = Some(e.to_string());
+                if let Some(st) = inner.status.as_mut() {
+                    st.phase = "error".into();
+                }
+            }
+        }
+        inner.running = false;
+    });
+
+    (StatusCode::ACCEPTED, "started").into_response()
+}
+
+async fn run_multi(
+    State(state): State<AppState>,
+    Json(params): Json<RunMultiParams>,
+) -> impl IntoResponse {
+    {
+        let mut inner = state.inner.write().await;
+        if inner.running {
+            return (StatusCode::CONFLICT, "A run is already in progress").into_response();
+        }
+        let have_b = params.b.as_ref().map(|p| !p.url.trim().is_empty()).unwrap_or(false);
+        let have_c = params.c.as_ref().map(|p| !p.url.trim().is_empty()).unwrap_or(false);
+        inner.running = true;
+        inner.error = None;
+        inner.phase = "starting".to_string();
+        let url_str = format!(
+            "A: {}{}{}{}{}",
+            params.a.url,
+            if have_b { " | B: " } else { "" },
+            if have_b { params.b.as_ref().unwrap().url.as_str() } else { "" },
+            if have_c { " | C: " } else { "" },
+            if have_c { params.c.as_ref().unwrap().url.as_str() } else { "" },
+        );
+        let host_str = {
+            let mut parts: Vec<String> = Vec::new();
+            if let Some(h) = params.a.host.clone() { parts.push(h); } else { parts.push(String::new()); }
+            if have_b { parts.push(params.b.as_ref().and_then(|p| p.host.clone()).unwrap_or_default()); }
+            if have_c { parts.push(params.c.as_ref().and_then(|p| p.host.clone()).unwrap_or_default()); }
+            parts.join(" | ")
+        };
+        inner.status = Some(RunStatus {
+            url: url_str,
+            host: host_str,
+            depth: params.a.depth.unwrap_or(2),
+            externals: params.a.externals.unwrap_or(false),
+            pages_crawled: 0,
+            links_checked: 0,
+            broken_links: 0,
+            ports_scanned: 0,
+            ports_open: 0,
+            vuln_findings: 0,
+            phase: "starting".into(),
+            done: false,
+        });
+        inner.last_results = None;
+        inner.last_results_b = None;
+        inner.last_results_c = None;
+        inner.last_report_html = None;
+        inner.last_abc_result = None;
+        inner.abc_progress = Some(AbcProgress::default());
+    }
+
+    let state_cl = state.clone();
+    tokio::spawn(async move {
+        let res = run_multi_pipeline(state_cl.clone(), params).await;
         let mut inner = state_cl.inner.write().await;
         match res {
             Ok(_) => {

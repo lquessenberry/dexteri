@@ -6,6 +6,8 @@ description = "Dexteri++: All-in-one website crawler, link checker, port/vulnera
 license = "MIT"
 repository = "https://example.com/dexteri"
 authors = ["Dexteri++ Team <devnull@example.com>"]
+autobins = false
+default-run = "dexteri"
 
 [profile.release]
 lto = true
@@ -39,12 +41,20 @@ plotters = "0.3"
 plotters-svg = "0.3"
 zip = { version = "0.6", default-features = false, features = ["deflate"] }
 
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
 [build-dependencies]
-tauri-build = { version = "1" }
+tauri-build = { version = "1", features = [] }
 
 [[bin]]
-name = "dexteri-gui"
+name = "dexteri"
 path = "src/gui.rs"
+
+[[bin]]
+name = "dexteri-cli"
+path = "src/main.rs"
 
 [dev-dependencies]
 assert_cmd = "2.0"

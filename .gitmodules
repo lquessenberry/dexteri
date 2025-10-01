@@ -1,0 +1,3 @@
+[submodule "frontend/domain-watcher-box"]
+	path = frontend/domain-watcher-box
+	url = https://github.com/lquessenberry/domain-watcher-box.git
