@@ -1,0 +1,169 @@
+use tempfile::TempDir;
+use dexteri::indexer::{index_pages, search_index};
+use dexteri::models::Page;
+
+fn create_sample_page(url: &str, title: &str, text: &str) -> Page {
+    Page {
+        url: url.to_string(),
+        status: Some(200),
+        title: Some(title.to_string()),
+        links: vec![],
+        content_type: Some("text/html".to_string()),
+        bytes: Some(1024),
+        text: Some(text.to_string()),
+        signals: None,
+    }
+}
+
+#[tokio::test]
+async fn test_index_empty_pages() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages: Vec<Page> = vec![];
+    let result = index_pages(&index_path, &pages).await;
+    
+    assert!(result.is_ok());
+    let stats = result.unwrap();
+    assert_eq!(stats.docs_indexed, 0, "Should index 0 pages");
+}
+
+#[tokio::test]
+async fn test_index_single_page() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages = vec![create_sample_page(
+        "https://example.com",
+        "Example Page",
+        "This is example content for indexing"
+    )];
+    
+    let result = index_pages(&index_path, &pages).await;
+    assert!(result.is_ok());
+    
+    let stats = result.unwrap();
+    assert_eq!(stats.docs_indexed, 1, "Should index 1 page");
+}
+
+#[tokio::test]
+async fn test_index_multiple_pages() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages = vec![
+        create_sample_page("https://example.com/page1", "Page One", "Content for page one"),
+        create_sample_page("https://example.com/page2", "Page Two", "Content for page two"),
+    ];
+    
+    let result = index_pages(&index_path, &pages).await;
+    assert!(result.is_ok());
+    
+    let stats = result.unwrap();
+    assert_eq!(stats.docs_indexed, 2, "Should index 2 pages");
+}
+
+#[tokio::test]
+async fn test_search_empty_index() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages: Vec<Page> = vec![];
+    index_pages(&index_path, &pages).await.unwrap();
+    
+    let results = search_index(&index_path, "test", 10);
+    assert!(results.is_ok());
+    
+    let hits = results.unwrap();
+    assert_eq!(hits.len(), 0, "Empty index should return no results");
+}
+
+#[tokio::test]
+async fn test_search_finds_content() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages = vec![
+        create_sample_page("https://example.com/rust", "Rust Programming", "Rust is a systems programming language"),
+        create_sample_page("https://example.com/python", "Python Programming", "Python is a high-level language"),
+    ];
+    
+    index_pages(&index_path, &pages).await.unwrap();
+    
+    let results = search_index(&index_path, "rust", 10).unwrap();
+    assert!(results.len() > 0, "Should find results for 'rust'");
+    assert!(results[0].url.contains("rust") || 
+            results[0].title.as_ref().map(|t| t.contains("Rust")).unwrap_or(false), 
+            "Result should contain 'rust'");
+}
+
+#[tokio::test]
+async fn test_search_respects_limit() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages: Vec<Page> = (0..10)
+        .map(|i| create_sample_page(
+            &format!("https://example.com/page{}", i),
+            &format!("Page {}", i),
+            "common search term appears here"
+        ))
+        .collect();
+    
+    index_pages(&index_path, &pages).await.unwrap();
+    
+    let results = search_index(&index_path, "common", 3).unwrap();
+    assert!(results.len() <= 3, "Should respect search limit of 3");
+}
+
+#[tokio::test]
+async fn test_search_case_insensitive() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages = vec![create_sample_page("https://example.com", "Example", "UPPERCASE content here")];
+    
+    index_pages(&index_path, &pages).await.unwrap();
+    
+    let results = search_index(&index_path, "uppercase", 10).unwrap();
+    assert!(results.len() > 0, "Search should be case-insensitive");
+}
+
+#[tokio::test]
+async fn test_search_nonexistent_term() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages = vec![create_sample_page("https://example.com", "Example", "Some content")];
+    
+    index_pages(&index_path, &pages).await.unwrap();
+    
+    let results = search_index(&index_path, "nonexistentxyz123", 10).unwrap();
+    assert_eq!(results.len(), 0, "Should return no results for non-existent term");
+}
+
+#[tokio::test]
+async fn test_index_pages_without_text() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages = vec![
+        Page {
+            url: "https://example.com".to_string(),
+            status: Some(200),
+            title: Some("No Text".to_string()),
+            links: vec![],
+            content_type: Some("text/html".to_string()),
+            bytes: Some(1024),
+            text: None,
+            signals: None,
+        },
+    ];
+    
+    let result = index_pages(&index_path, &pages).await;
+    assert!(result.is_ok(), "Should handle pages without text");
+    
+    let stats = result.unwrap();
+    // Pages without text are not indexed
+    assert_eq!(stats.docs_indexed, 0, "Should not index pages without text");
+}
