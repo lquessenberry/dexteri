@@ -25,7 +25,7 @@ jobs:
       - name: Run Doc Specs (pure-web) with Mochawesome
         working-directory: frontend/domain-watcher-box
         run: |
-          npx -y start-server-and-test "npm run dev" http://localhost:5174 "cypress run --spec 'cypress/e2e/configure_timeouts.pw.cy.js,cypress/e2e/export_dropdown.pw.cy.js' --env screenshots=true --env mochawesome=true"
+          npx -y start-server-and-test "npm run dev" http://localhost:5174 "cypress run --spec 'cypress/e2e/configure_timeouts.pw.cy.js,cypress/e2e/export_dropdown.pw.cy.js,cypress/e2e/threat_intelligence.pw.cy.js,cypress/e2e/network_monitor.pw.cy.js' --env screenshots=true --env mochawesome=true"
           npm run report:merge || true
           npm run report:generate || true
 
