@@ -1020,16 +1020,14 @@ async fn run_pipeline(state: Arc<RwLock<InnerState>>, params: RunAllParams) -> a
         if let Some(st) = inner.status.as_mut() {
             st.phase = "vuln".into();
         }
+        let findings_so_far = inner
+            .last_results
+            .as_ref()
+            .map(|r| r.vuln.findings.len())
+            .unwrap_or(0);
         push_log(
             &mut inner,
-            &format!(
-                "Phase: vuln ({} findings so far)",
-                inner
-                    .last_results
-                    .as_ref()
-                    .map(|r| r.vuln.findings.len())
-                    .unwrap_or(0)
-            ),
+            &format!("Phase: vuln ({} findings so far)", findings_so_far),
         );
     }
     let vuln_timeout = Duration::from_millis(get_timeout("vuln") as u64);
