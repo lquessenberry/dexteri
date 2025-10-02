@@ -229,3 +229,49 @@ fn test_is_same_host_or_subdomain_single_label() {
     let url2 = Url::parse("http://localhost/page2").unwrap();
     assert!(is_same_host_or_subdomain(&url1, &url2));
 }
+
+// Edge case tests for 100% coverage
+#[test]
+fn test_resolve_url_malformed() {
+    use dexteri::util::resolve_url;
+    let base = Url::parse("https://example.com").unwrap();
+    // Force base.join() to fail
+    let result = resolve_url(&base, "http://[invalid");
+    assert!(result.is_none(), "Should return None for malformed URL");
+}
+
+#[test]
+fn test_is_same_host_or_subdomain_base_no_host() {
+    use dexteri::util::is_same_host_or_subdomain;
+    // URLs without hosts (like data: or javascript:)
+    let url1 = Url::parse("data:text/plain,hello").unwrap();
+    let url2 = Url::parse("https://example.com").unwrap();
+    assert!(!is_same_host_or_subdomain(&url1, &url2));
+}
+
+#[test]
+fn test_is_same_host_or_subdomain_other_no_host() {
+    use dexteri::util::is_same_host_or_subdomain;
+    let url1 = Url::parse("https://example.com").unwrap();
+    let url2 = Url::parse("data:text/plain,hello").unwrap();
+    assert!(!is_same_host_or_subdomain(&url1, &url2));
+}
+
+#[test]
+fn test_is_same_host_or_subdomain_both_no_host() {
+    use dexteri::util::is_same_host_or_subdomain;
+    let url1 = Url::parse("data:text/plain,one").unwrap();
+    let url2 = Url::parse("data:text/plain,two").unwrap();
+    // Both have no host, will return false early
+    assert!(!is_same_host_or_subdomain(&url1, &url2));
+}
+
+#[test]
+fn test_is_same_host_or_subdomain_comparison_with_different_single_labels() {
+    use dexteri::util::is_same_host_or_subdomain;
+    // Single label hosts (no dots) - should use the whole string as root domain
+    let url1 = Url::parse("http://localhost/page").unwrap();
+    let url2 = Url::parse("http://otherhost/page").unwrap();
+    // Different single-label hosts should NOT be same
+    assert!(!is_same_host_or_subdomain(&url1, &url2));
+}
