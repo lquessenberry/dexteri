@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::time::Duration;
 
 use axum::{
     routing::get,
@@ -220,4 +221,141 @@ async fn test_crawl_marketing_signals() {
         assert!(signals.twitter_tags > 0, "Should detect Twitter tags");
         assert!(signals.json_ld_blocks > 0, "Should detect JSON-LD");
     }
+}
+
+#[tokio::test]
+async fn test_crawl_with_rate_limit_zero() {
+    use dexteri::crawler::crawl_with_logs;
+    
+    let html = r#"<html><body><a href="/p1">1</a><a href="/p2">2</a></body></html>"#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    // RPS of 0 should be treated as 1 to avoid division by zero
+    let result = crawl_with_logs(
+        &client, &url, 1, 2, false, false,
+        None, None, None,
+        Some(0) // rate_limit_rps = 0
+    ).await.unwrap();
+    
+    assert!(result.pages.len() >= 1, "Should complete crawl even with RPS=0");
+}
+
+#[tokio::test]
+async fn test_crawl_with_progress_callback() {
+    use dexteri::crawler::crawl_with_logs;
+    use tokio::sync::mpsc::unbounded_channel;
+    
+    let html = r#"<html><body><a href="/p1">1</a><a href="/p2">2</a></body></html>"#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let (progress_tx, mut progress_rx) = unbounded_channel();
+    
+    tokio::spawn(async move {
+        let _ = crawl_with_logs(
+            &client, &url, 1, 2, false, false,
+            None,
+            Some(progress_tx), None, None
+        ).await;
+    });
+    
+    // Should receive at least one progress update
+    let progress = tokio::time::timeout(
+        Duration::from_secs(5),
+        progress_rx.recv()
+    ).await;
+    
+    assert!(progress.is_ok(), "Should receive progress updates");
+    let prog = progress.unwrap().unwrap();
+    assert!(prog.pages_crawled >= 0, "Progress should have valid data");
+}
+
+#[tokio::test]
+async fn test_crawl_with_log_callback() {
+    use dexteri::crawler::crawl_with_logs;
+    use tokio::sync::mpsc::unbounded_channel;
+    
+    let html = r#"<html><body>Test</body></html>"#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let (log_tx, mut log_rx) = unbounded_channel();
+    
+    tokio::spawn(async move {
+        let _ = crawl_with_logs(
+            &client, &url, 0, 2, false, false,
+            Some(log_tx),
+            None, None, None
+        ).await;
+    });
+    
+    // Should receive crawl start log
+    let log = tokio::time::timeout(
+        Duration::from_secs(5),
+        log_rx.recv()
+    ).await;
+    
+    assert!(log.is_ok(), "Should receive log messages");
+    let log_msg = log.unwrap().unwrap();
+    assert!(log_msg.contains("crawl start"), "Should log crawl start");
+}
+
+#[tokio::test]
+async fn test_crawl_with_cancel_signal() {
+    use dexteri::crawler::crawl_with_logs;
+    use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+    
+    let html = r#"<html><body><a href="/p1">1</a><a href="/p2">2</a><a href="/p3">3</a></body></html>"#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let cancel_flag = Arc::new(AtomicBool::new(false));
+    let cancel_clone = cancel_flag.clone();
+    
+    let handle = tokio::spawn(async move {
+        crawl_with_logs(
+            &client, &url, 2, 1, false, false,
+            None, None,
+            Some(cancel_clone),
+            Some(1) // Slow rate limit to give time to cancel
+        ).await
+    });
+    
+    // Give it a moment to start
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    
+    // Send cancel signal
+    cancel_flag.store(true, Ordering::Relaxed);
+    
+    // Should complete quickly after cancel
+    let result = tokio::time::timeout(
+        Duration::from_secs(2),
+        handle
+    ).await;
+    
+    assert!(result.is_ok(), "Should stop when cancel signal received");
+}
+
+#[tokio::test]
+async fn test_crawl_subdomain_inclusion() {
+    use dexteri::crawler::crawl_with_logs;
+    
+    let html = r#"<html><body><a href="http://sub.example.com/page">Subdomain</a></body></html>"#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    // include_subdomains = true
+    let result = crawl_with_logs(
+        &client, &url, 1, 2, false, true,
+        None, None, None, None
+    ).await.unwrap();
+    
+    // Should attempt to check subdomain link
+    assert!(result.links_checked >= 1, "Should check links including subdomains");
 }
