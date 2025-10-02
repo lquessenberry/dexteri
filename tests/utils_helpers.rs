@@ -127,3 +127,105 @@ fn test_client_supports_redirects() {
     // Client should be configured - we can't test internals, but construction succeeds
     assert!(true);
 }
+
+// Tests for resolve_url
+#[test]
+fn test_resolve_url_absolute() {
+    use dexteri::util::resolve_url;
+    let base = Url::parse("https://example.com/path").unwrap();
+    let result = resolve_url(&base, "https://other.com/page");
+    assert!(result.is_some());
+    assert_eq!(result.unwrap().as_str(), "https://other.com/page");
+}
+
+#[test]
+fn test_resolve_url_relative() {
+    use dexteri::util::resolve_url;
+    let base = Url::parse("https://example.com/path/").unwrap();
+    let result = resolve_url(&base, "page.html");
+    assert!(result.is_some());
+    assert_eq!(result.unwrap().as_str(), "https://example.com/path/page.html");
+}
+
+#[test]
+fn test_resolve_url_root_relative() {
+    use dexteri::util::resolve_url;
+    let base = Url::parse("https://example.com/path/subpath").unwrap();
+    let result = resolve_url(&base, "/other");
+    assert!(result.is_some());
+    assert_eq!(result.unwrap().as_str(), "https://example.com/other");
+}
+
+#[test]
+fn test_resolve_url_fragment() {
+    use dexteri::util::resolve_url;
+    let base = Url::parse("https://example.com/path").unwrap();
+    let result = resolve_url(&base, "#section");
+    assert!(result.is_some());
+    assert!(result.unwrap().as_str().contains("#section"));
+}
+
+// Tests for is_same_host_or_subdomain
+#[test]
+fn test_is_same_host_or_subdomain_identical() {
+    use dexteri::util::is_same_host_or_subdomain;
+    let url1 = Url::parse("https://example.com/page1").unwrap();
+    let url2 = Url::parse("https://example.com/page2").unwrap();
+    assert!(is_same_host_or_subdomain(&url1, &url2));
+}
+
+#[test]
+fn test_is_same_host_or_subdomain_subdomain() {
+    use dexteri::util::is_same_host_or_subdomain;
+    let url1 = Url::parse("https://example.com/page").unwrap();
+    let url2 = Url::parse("https://www.example.com/page").unwrap();
+    assert!(is_same_host_or_subdomain(&url1, &url2));
+}
+
+#[test]
+fn test_is_same_host_or_subdomain_different_root() {
+    use dexteri::util::is_same_host_or_subdomain;
+    let url1 = Url::parse("https://example.com/page").unwrap();
+    let url2 = Url::parse("https://other.com/page").unwrap();
+    assert!(!is_same_host_or_subdomain(&url1, &url2));
+}
+
+#[test]
+fn test_is_same_host_or_subdomain_different_scheme() {
+    use dexteri::util::is_same_host_or_subdomain;
+    let url1 = Url::parse("http://example.com/page").unwrap();
+    let url2 = Url::parse("https://example.com/page").unwrap();
+    assert!(!is_same_host_or_subdomain(&url1, &url2));
+}
+
+#[test]
+fn test_is_same_host_or_subdomain_no_host() {
+    use dexteri::util::is_same_host_or_subdomain;
+    let url1 = Url::parse("https://example.com/page").unwrap();
+    let url2 = Url::parse("file:///path/to/file").unwrap();
+    assert!(!is_same_host_or_subdomain(&url1, &url2));
+}
+
+#[test]
+fn test_is_same_host_or_subdomain_api_subdomain() {
+    use dexteri::util::is_same_host_or_subdomain;
+    let url1 = Url::parse("https://example.com/page").unwrap();
+    let url2 = Url::parse("https://api.example.com/endpoint").unwrap();
+    assert!(is_same_host_or_subdomain(&url1, &url2));
+}
+
+#[test]
+fn test_is_same_host_or_subdomain_deep_subdomain() {
+    use dexteri::util::is_same_host_or_subdomain;
+    let url1 = Url::parse("https://example.com/page").unwrap();
+    let url2 = Url::parse("https://sub1.sub2.example.com/page").unwrap();
+    assert!(is_same_host_or_subdomain(&url1, &url2));
+}
+
+#[test]
+fn test_is_same_host_or_subdomain_single_label() {
+    use dexteri::util::is_same_host_or_subdomain;
+    let url1 = Url::parse("http://localhost/page1").unwrap();
+    let url2 = Url::parse("http://localhost/page2").unwrap();
+    assert!(is_same_host_or_subdomain(&url1, &url2));
+}
