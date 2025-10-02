@@ -87,6 +87,9 @@ pub async fn serve(bind: SocketAddr) -> anyhow::Result<()> {
         .route("/", get(index))
         .route("/api/status", get(get_status))
         .route("/api/results.json", get(get_results_json))
+        .route("/api/pages", get(get_pages))
+        .route("/api/marketing", get(get_marketing))
+        .route("/api/techstack", get(get_techstack))
         .route("/api/export", get(export_data))
         .route("/api/run/all", post(run_all))
         .route("/api/run/multi", post(run_multi))
@@ -337,6 +340,161 @@ async fn get_results_json(State(state): State<AppState>, Query(q): Query<Results
     };
     if let Some(res) = opt {
         (StatusCode::OK, Json(res)).into_response()
+    } else {
+        (StatusCode::NOT_FOUND, "No results yet").into_response()
+    }
+}
+
+async fn get_pages(State(state): State<AppState>, Query(q): Query<ResultsQuery>) -> impl IntoResponse {
+    let inner = state.inner.read().await;
+    let site = q.site.as_deref().unwrap_or("A");
+    let opt = match site.to_ascii_uppercase().as_str() {
+        "A" => inner.last_results.as_ref(),
+        "B" => inner.last_results_b.as_ref(),
+        "C" => inner.last_results_c.as_ref(),
+        _ => inner.last_results.as_ref(),
+    };
+    if let Some(res) = opt {
+        (StatusCode::OK, Json(&res.crawl.pages)).into_response()
+    } else {
+        (StatusCode::NOT_FOUND, "No results yet").into_response()
+    }
+}
+
+async fn get_marketing(State(state): State<AppState>, Query(q): Query<ResultsQuery>) -> impl IntoResponse {
+    let inner = state.inner.read().await;
+    let site = q.site.as_deref().unwrap_or("A");
+    let opt = match site.to_ascii_uppercase().as_str() {
+        "A" => inner.last_results.as_ref(),
+        "B" => inner.last_results_b.as_ref(),
+        "C" => inner.last_results_c.as_ref(),
+        _ => inner.last_results.as_ref(),
+    };
+    if let Some(res) = opt {
+        // Aggregate marketing signals from all pages
+        use std::collections::HashMap;
+        let mut json_ld_total = 0;
+        let mut microdata_total = 0;
+        let mut open_graph_total = 0;
+        let mut twitter_total = 0;
+        let mut canonical_pages = 0;
+        let mut robots_pages = 0;
+        let mut hreflang_total = 0;
+        let mut trackers: HashMap<String, usize> = HashMap::new();
+        
+        for page in &res.crawl.pages {
+            if let Some(signals) = &page.signals {
+                json_ld_total += signals.json_ld_blocks;
+                microdata_total += signals.microdata_items;
+                open_graph_total += signals.open_graph_tags;
+                twitter_total += signals.twitter_tags;
+                if signals.canonical_url.is_some() {
+                    canonical_pages += 1;
+                }
+                if signals.meta_robots.is_some() {
+                    robots_pages += 1;
+                }
+                hreflang_total += signals.hreflang_count;
+                for tracker in &signals.trackers {
+                    *trackers.entry(tracker.clone()).or_insert(0) += 1;
+                }
+            }
+        }
+        
+        let response = serde_json::json!({
+            "json_ld_total": json_ld_total,
+            "microdata_total": microdata_total,
+            "open_graph_total": open_graph_total,
+            "twitter_total": twitter_total,
+            "canonical_pages": canonical_pages,
+            "robots_pages": robots_pages,
+            "hreflang_total": hreflang_total,
+            "trackers": trackers,
+            "total_pages": res.crawl.pages.len()
+        });
+        (StatusCode::OK, Json(response)).into_response()
+    } else {
+        (StatusCode::NOT_FOUND, "No results yet").into_response()
+    }
+}
+
+async fn get_techstack(State(state): State<AppState>, Query(q): Query<ResultsQuery>) -> impl IntoResponse {
+    let inner = state.inner.read().await;
+    let site = q.site.as_deref().unwrap_or("A");
+    let opt = match site.to_ascii_uppercase().as_str() {
+        "A" => inner.last_results.as_ref(),
+        "B" => inner.last_results_b.as_ref(),
+        "C" => inner.last_results_c.as_ref(),
+        _ => inner.last_results.as_ref(),
+    };
+    if let Some(res) = opt {
+        // Detect technology stack from pages
+        let mut cms_name = "Unknown".to_string();
+        let mut cms_version = "N/A".to_string();
+        let mut server_name = "Unknown".to_string();
+        let mut frameworks = Vec::new();
+        let mut languages = Vec::new();
+        let mut libraries = Vec::new();
+        
+        // Simple detection from first page with signals
+        for page in &res.crawl.pages {
+            if let Some(text) = &page.text {
+                let lower = text.to_lowercase();
+                
+                // CMS detection
+                if lower.contains("wp-content") || lower.contains("wordpress") {
+                    cms_name = "WordPress".to_string();
+                } else if lower.contains("drupal") {
+                    cms_name = "Drupal".to_string();
+                } else if lower.contains("joomla") {
+                    cms_name = "Joomla".to_string();
+                }
+                
+                // Framework detection
+                if lower.contains("react") && !frameworks.contains(&"React".to_string()) {
+                    frameworks.push("React".to_string());
+                }
+                if lower.contains("vue") && !frameworks.contains(&"Vue.js".to_string()) {
+                    frameworks.push("Vue.js".to_string());
+                }
+                if lower.contains("angular") && !frameworks.contains(&"Angular".to_string()) {
+                    frameworks.push("Angular".to_string());
+                }
+                
+                // Language detection
+                if lower.contains("php") && !languages.contains(&"PHP".to_string()) {
+                    languages.push("PHP".to_string());
+                }
+                if lower.contains("python") && !languages.contains(&"Python".to_string()) {
+                    languages.push("Python".to_string());
+                }
+                
+                // Library detection
+                if lower.contains("jquery") && !libraries.contains(&"jQuery".to_string()) {
+                    libraries.push("jQuery".to_string());
+                }
+            }
+            
+            // Server detection from first page
+            if server_name == "Unknown" {
+                if let Some(ct) = &page.content_type {
+                    if ct.contains("nginx") {
+                        server_name = "nginx".to_string();
+                    } else if ct.contains("apache") {
+                        server_name = "Apache".to_string();
+                    }
+                }
+            }
+        }
+        
+        let response = serde_json::json!({
+            "cms": { "name": cms_name, "version": cms_version },
+            "server": { "name": server_name },
+            "frameworks": frameworks,
+            "languages": languages,
+            "libraries": libraries
+        });
+        (StatusCode::OK, Json(response)).into_response()
     } else {
         (StatusCode::NOT_FOUND, "No results yet").into_response()
     }
