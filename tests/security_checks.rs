@@ -487,3 +487,83 @@ async fn test_security_detects_multiple_frameworks() {
     );
     assert!(framework_detected, "Should detect multiple frameworks");
 }
+
+#[tokio::test]
+async fn test_security_detects_magento_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="Magento 2.4">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("Magento"));
+    assert!(cms_detected, "Should detect Magento via generator tag");
+}
+
+#[tokio::test]
+async fn test_security_detects_shopify_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="Shopify">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("Shopify"));
+    assert!(cms_detected, "Should detect Shopify via generator tag");
+}
+
+#[tokio::test]
+async fn test_security_detects_prestashop_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="PrestaShop">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("PrestaShop"));
+    assert!(cms_detected, "Should detect PrestaShop via generator tag");
+}
+
+#[tokio::test]
+async fn test_security_detects_opencart_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="OpenCart 3.0">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("OpenCart"));
+    assert!(cms_detected, "Should detect OpenCart via generator tag");
+}
