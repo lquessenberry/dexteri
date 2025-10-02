@@ -258,3 +258,232 @@ async fn test_security_network_error() {
     let fetch_failed = flags.iter().any(|f| f.title.contains("Fetch failed"));
     assert!(fetch_failed, "Should handle network errors gracefully");
 }
+
+#[tokio::test]
+async fn test_security_detects_server_header() {
+    let html = "<!DOCTYPE html><html><body>Test</body></html>";
+    let (_server, url) = setup_mock_with_content(html, vec![
+        ("server", "nginx/1.18.0")
+    ]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let server_detected = flags.iter().any(|f| 
+        f.title.contains("Server header") || f.description.contains("nginx")
+    );
+    assert!(server_detected, "Should detect Server header exposure");
+}
+
+#[tokio::test]
+async fn test_security_detects_xpoweredby_with_version() {
+    let html = "<!DOCTYPE html><html><body>Test</body></html>";
+    let (_server, url) = setup_mock_with_content(html, vec![
+        ("x-powered-by", "PHP/7.4.3")
+    ]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let xpb_detected = flags.iter().any(|f| 
+        f.title.contains("X-Powered-By") && f.level == "Medium"
+    );
+    assert!(xpb_detected, "Should detect X-Powered-By with version as Medium");
+}
+
+#[tokio::test]
+async fn test_security_detects_xpoweredby_without_version() {
+    let html = "<!DOCTYPE html><html><body>Test</body></html>";
+    let (_server, url) = setup_mock_with_content(html, vec![
+        ("x-powered-by", "Express")
+    ]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let xpb_detected = flags.iter().any(|f| 
+        f.title.contains("X-Powered-By") && f.level == "Low"
+    );
+    assert!(xpb_detected, "Should detect X-Powered-By without version as Low");
+}
+
+#[tokio::test]
+async fn test_security_wordpress_version_exposed() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="WordPress 5.8">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    // Should detect both CMS and version exposure
+    let version_exposed = flags.iter().any(|f| 
+        f.title.contains("version exposed") || f.title.contains("Version")
+    );
+    assert!(version_exposed, "Should detect WordPress version exposure");
+}
+
+#[tokio::test]
+async fn test_security_detects_react() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <body>
+            <div id="root"></div>
+            <script src="/static/js/react.production.min.js"></script>
+        </body>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let framework_detected = flags.iter().any(|f| 
+        f.title.contains("Frontend framework") && f.description.contains("React")
+    );
+    assert!(framework_detected, "Should detect React framework");
+}
+
+#[tokio::test]
+async fn test_security_detects_vue() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <body>
+            <div id="app" v-bind:title="message"></div>
+        </body>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let framework_detected = flags.iter().any(|f| 
+        f.title.contains("Frontend framework") && f.description.contains("Vue")
+    );
+    assert!(framework_detected, "Should detect Vue framework");
+}
+
+#[tokio::test]
+async fn test_security_detects_angular() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html ng-app="myApp">
+        <body>
+            <div ng-controller="MainCtrl"></div>
+        </body>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let framework_detected = flags.iter().any(|f| 
+        f.title.contains("Frontend framework") && f.description.contains("Angular")
+    );
+    assert!(framework_detected, "Should detect Angular framework");
+}
+
+#[tokio::test]
+async fn test_security_detects_vite() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <script type="module" src="/@vite/client"></script>
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let framework_detected = flags.iter().any(|f| 
+        f.title.contains("Frontend framework") && f.description.contains("Vite")
+    );
+    assert!(framework_detected, "Should detect Vite build tool");
+}
+
+#[tokio::test]
+async fn test_security_detects_nextjs() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <script src="/_next/static/chunks/main.js"></script>
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let framework_detected = flags.iter().any(|f| 
+        f.title.contains("Frontend framework") && f.description.contains("Next.js")
+    );
+    assert!(framework_detected, "Should detect Next.js framework");
+}
+
+#[tokio::test]
+async fn test_security_detects_svelte() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <body>
+            <script src="/build/svelte-bundle.js"></script>
+        </body>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let framework_detected = flags.iter().any(|f| 
+        f.title.contains("Frontend framework") && f.description.contains("Svelte")
+    );
+    assert!(framework_detected, "Should detect Svelte framework");
+}
+
+#[tokio::test]
+async fn test_security_detects_multiple_frameworks() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <body>
+            <div id="root"></div>
+            <script src="/react.min.js"></script>
+            <script src="/_next/static/main.js"></script>
+        </body>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let framework_detected = flags.iter().any(|f| 
+        f.title.contains("Frontend framework") && 
+        (f.description.contains("React") || f.description.contains("Next.js"))
+    );
+    assert!(framework_detected, "Should detect multiple frameworks");
+}
