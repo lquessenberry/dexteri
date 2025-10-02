@@ -359,3 +359,175 @@ async fn test_crawl_subdomain_inclusion() {
     // Should attempt to check subdomain link
     assert!(result.links_checked >= 1, "Should check links including subdomains");
 }
+
+#[tokio::test]
+async fn test_crawl_detects_google_analytics() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://www.google-analytics.com/analytics.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Google Analytics")), 
+                "Should detect Google Analytics tracker");
+    } else {
+        panic!("Should have signals");
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_facebook_pixel() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://connect.facebook.net/en_US/fbevents.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Facebook")), 
+                "Should detect Facebook Pixel tracker");
+    } else {
+        panic!("Should have signals");
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_google_tag_manager() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://www.googletagmanager.com/gtm.js?id=GTM-XXXX"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Google Tag Manager")), 
+                "Should detect Google Tag Manager");
+    } else {
+        panic!("Should have signals");
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_hotjar() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://static.hotjar.com/c/hotjar-12345.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Hotjar")), 
+                "Should detect Hotjar tracker");
+    } else {
+        panic!("Should have signals");
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_segment() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://cdn.segment.com/analytics.js/v1/xxx.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Segment")), 
+                "Should detect Segment tracker");
+    } else {
+        panic!("Should have signals");
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_mixpanel() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://cdn.mxpnl.com/libs/mixpanel-2-latest.min.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Mixpanel")), 
+                "Should detect Mixpanel tracker");
+    } else {
+        panic!("Should have signals");
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_multiple_trackers() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://www.google-analytics.com/analytics.js"></script>
+            <script src="https://connect.facebook.net/en_US/fbevents.js"></script>
+            <script src="https://static.hotjar.com/c/hotjar-12345.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.len() >= 3, "Should detect multiple trackers");
+        assert!(signals.trackers.iter().any(|t| t.contains("Google Analytics")));
+        assert!(signals.trackers.iter().any(|t| t.contains("Facebook")));
+        assert!(signals.trackers.iter().any(|t| t.contains("Hotjar")));
+    } else {
+        panic!("Should have signals");
+    }
+}
