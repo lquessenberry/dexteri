@@ -167,3 +167,55 @@ async fn test_index_pages_without_text() {
     // Pages without text are not indexed
     assert_eq!(stats.docs_indexed, 0, "Should not index pages without text");
 }
+
+#[tokio::test]
+async fn test_reindex_existing_directory() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    // Create initial index
+    let pages1 = vec![create_sample_page("https://example.com/1", "First", "First content")];
+    index_pages(&index_path, &pages1).await.unwrap();
+    
+    // Reindex - should remove old directory and create new
+    let pages2 = vec![create_sample_page("https://example.com/2", "Second", "Second content")];
+    let result = index_pages(&index_path, &pages2).await;
+    
+    assert!(result.is_ok(), "Should handle reindexing existing directory");
+    let stats = result.unwrap();
+    assert_eq!(stats.docs_indexed, 1, "Should index new pages after cleanup");
+    
+    // Search should only find new content
+    let results = search_index(&index_path, "Second", 10).unwrap();
+    assert!(results.len() > 0, "Should find new content");
+    
+    let results_old = search_index(&index_path, "First", 10).unwrap();
+    assert_eq!(results_old.len(), 0, "Should not find old content after reindex");
+}
+
+#[tokio::test]
+async fn test_search_with_no_title() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    // Create page without title
+    let pages = vec![Page {
+        url: "https://example.com".to_string(),
+        status: Some(200),
+        title: None,
+        links: vec![],
+        content_type: Some("text/html".to_string()),
+        bytes: Some(1024),
+        text: Some("Content with searchable text".to_string()),
+        signals: None,
+    }];
+    
+    index_pages(&index_path, &pages).await.unwrap();
+    
+    let results = search_index(&index_path, "searchable", 10).unwrap();
+    assert!(results.len() > 0, "Should find results even without title");
+    // Title will be empty string since unwrap_or_default() is used
+    assert!(results[0].title.as_ref().map(|t| t.is_empty()).unwrap_or(true), 
+            "Title should be empty or None");
+    assert!(!results[0].url.is_empty(), "URL should still be present");
+}
