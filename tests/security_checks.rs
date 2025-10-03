@@ -567,3 +567,279 @@ async fn test_security_detects_opencart_via_generator() {
     let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("OpenCart"));
     assert!(cms_detected, "Should detect OpenCart via generator tag");
 }
+
+#[tokio::test]
+async fn test_security_detects_contentful_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="Contentful">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("Contentful"));
+    assert!(cms_detected, "Should detect Contentful via generator tag");
+}
+
+#[tokio::test]
+async fn test_security_detects_hubspot_cms_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="HubSpot">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("HubSpot"));
+    assert!(cms_detected, "Should detect HubSpot CMS via generator tag");
+}
+
+#[tokio::test]
+async fn test_security_detects_aem_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="Adobe Experience Manager">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("Adobe Experience Manager"));
+    assert!(cms_detected, "Should detect Adobe Experience Manager via generator tag");
+}
+
+#[tokio::test]
+async fn test_security_detects_sitecore_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="Sitecore">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("Sitecore"));
+    assert!(cms_detected, "Should detect Sitecore via generator tag");
+}
+
+#[tokio::test]
+async fn test_security_detects_silverstripe_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="SilverStripe">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("SilverStripe"));
+    assert!(cms_detected, "Should detect SilverStripe via generator tag");
+}
+
+#[tokio::test]
+async fn test_security_detects_concrete_cms_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="Concrete CMS">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("Concrete"));
+    assert!(cms_detected, "Should detect Concrete CMS via generator tag");
+}
+
+#[tokio::test]
+async fn test_security_detects_modx_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="MODX Revolution">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("MODX"));
+    assert!(cms_detected, "Should detect MODX via generator tag");
+}
+
+#[tokio::test]
+async fn test_security_detects_pimcore_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="Pimcore">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("Pimcore"));
+    assert!(cms_detected, "Should detect Pimcore via generator tag");
+}
+
+#[tokio::test]
+async fn test_security_detects_bloomreach_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="Bloomreach Experience">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("Bloomreach"));
+    assert!(cms_detected, "Should detect Bloomreach via generator tag");
+}
+
+#[tokio::test]
+async fn test_security_server_header_no_version() {
+    let html = "<!DOCTYPE html><html><body>Test</body></html>";
+    let (_server, url) = setup_mock_with_content(html, vec![
+        ("server", "nginx")
+    ]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let server_detected = flags.iter().any(|f| 
+        f.title.contains("Server header") && f.level == "Low"
+    );
+    assert!(server_detected, "Should detect Server header without version as Low");
+}
+
+#[tokio::test]
+async fn test_security_detects_typo3_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="TYPO3 CMS">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("TYPO3"));
+    assert!(cms_detected, "Should detect TYPO3 via generator tag");
+}
+
+#[tokio::test]
+async fn test_security_detects_ghost_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="Ghost 4.0">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("Ghost"));
+    assert!(cms_detected, "Should detect Ghost via generator tag");
+}
+
+#[tokio::test]
+async fn test_security_detects_wix_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="Wix.com Website Builder">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("Wix"));
+    assert!(cms_detected, "Should detect Wix via generator tag");
+}
+
+#[tokio::test]
+async fn test_security_detects_squarespace_via_generator() {
+    let html = r#"
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="generator" content="Squarespace">
+        </head>
+        </html>
+    "#;
+    
+    let (_server, url) = setup_mock_with_content(html, vec![]).await;
+    let client = reqwest::Client::new();
+    
+    let flags = check_security_posture(&client, &url).await.unwrap();
+    
+    let cms_detected = flags.iter().any(|f| f.title.contains("CMS detected") && f.title.contains("Squarespace"));
+    assert!(cms_detected, "Should detect Squarespace via generator tag");
+}
