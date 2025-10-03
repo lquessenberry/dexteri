@@ -721,3 +721,246 @@ async fn test_crawl_detects_pardot() {
         assert!(signals.trackers.iter().any(|t| t.contains("Pardot")));
     }
 }
+
+#[tokio::test]
+async fn test_crawl_detects_chartbeat() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://static.chartbeat.com/js/chartbeat.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Chartbeat")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_quora_pixel() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://q.quora.com/_/ad/abc123/pixel.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Quora")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_twitter_analytics() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://analytics.twitter.com/i/adsct"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Twitter")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_yandex_metrica() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://mc.yandex.ru/metrika/watch.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Yandex")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_crazyegg() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://script.crazyegg.com/pages/scripts/0012/3456.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Crazy Egg")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_criteo() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://static.criteo.com/js/ld/ld.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Criteo")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_adroll() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://s.adroll.com/j/roundtrip.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("AdRoll")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_onetrust() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://cdn.onetrust.com/consent/otSDKStub.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("OneTrust")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_cookiebot() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://consent.cookiebot.com/uc.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Cookiebot")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_gtag_in_body() {
+    let html = r#"
+        <html>
+        <body>
+            <script>
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', 'G-XXXXXXXXXX');
+            </script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Google Analytics") && t.contains("gtag")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_fbq_in_body() {
+    let html = r#"
+        <html>
+        <body>
+            <script>
+                !function(f,b,e,v,n,t,s){
+                    if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+                    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+                };
+                fbq('init', '123456789');
+                fbq('track', 'PageView');
+            </script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Facebook")));
+    }
+}
