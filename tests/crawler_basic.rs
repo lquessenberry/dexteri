@@ -531,3 +531,193 @@ async fn test_crawl_detects_multiple_trackers() {
         panic!("Should have signals");
     }
 }
+
+#[tokio::test]
+async fn test_crawl_detects_hubspot_tracker() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://js.hs-scripts.com/12345.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("HubSpot")), 
+                "Should detect HubSpot tracker");
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_onesignal() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://tag.cdn.onesignal.com/tags.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("OneSignal")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_microsoft_clarity() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://www.clarity.ms/tag/abc123"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Microsoft Clarity")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_optimizely() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://cdn.optimizely.com/js/12345.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Optimizely")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_fullstory() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://fullstory.com/s/fs.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("FullStory")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_intercom() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://widget.intercom.io/widget/abc123"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Intercom")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_linkedin_insight() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://snap.licdn.com/li.lms-analytics/insight.min.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("LinkedIn")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_marketo() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://munchkin.marketo.net/munchkin.js"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Marketo")));
+    }
+}
+
+#[tokio::test]
+async fn test_crawl_detects_pardot() {
+    let html = r#"
+        <html>
+        <body>
+            <script src="https://pi.pardot.com/analytics"></script>
+        </body>
+        </html>
+    "#;
+    let (addr, _handle) = start_simple_site(html.to_string()).await;
+    let url = Url::parse(&format!("http://{}/", addr)).unwrap();
+    let client = reqwest::Client::new();
+    
+    let result = crawl(&client, &url, 0, 4, false, false).await.unwrap();
+    
+    let page = &result.pages[0];
+    if let Some(signals) = &page.signals {
+        assert!(signals.trackers.iter().any(|t| t.contains("Pardot")));
+    }
+}
