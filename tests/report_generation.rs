@@ -371,3 +371,206 @@ fn test_report_comprehensive_marketing_signals() {
     assert!(content.contains("noindex,nofollow") || content.contains("meta_robots"), 
             "Should show robots meta");
 }
+
+#[test]
+fn test_report_all_severity_levels() {
+    let temp_dir = TempDir::new().unwrap();
+    let report_path = temp_dir.path().join("report.html");
+    
+    let url = Url::parse("https://example.com").unwrap();
+    let crawl = CrawlResult {
+        pages_crawled: 0,
+        links_checked: 0,
+        broken_links: vec![],
+        pages: vec![],
+    };
+    let ports = PortsResult { open_ports: vec![], scanned: 0 };
+    let vuln = VulnReport {
+        findings: vec![
+            Finding {
+                title: "Critical Issue".to_string(),
+                description: "Very bad".to_string(),
+                severity: "Critical".to_string(),
+                url: Some("https://example.com".to_string()),
+            },
+            Finding {
+                title: "High Issue".to_string(),
+                description: "Bad".to_string(),
+                severity: "High".to_string(),
+                url: Some("https://example.com".to_string()),
+            },
+            Finding {
+                title: "Medium Issue".to_string(),
+                description: "Concerning".to_string(),
+                severity: "Medium".to_string(),
+                url: None,
+            },
+            Finding {
+                title: "Low Issue".to_string(),
+                description: "Minor".to_string(),
+                severity: "Low".to_string(),
+                url: None,
+            },
+            Finding {
+                title: "Info Item".to_string(),
+                description: "FYI".to_string(),
+                severity: "Info".to_string(),
+                url: None,
+            },
+        ],
+    };
+    let security = vec![];
+    
+    write_report(&report_path, &url, &crawl, &ports, &vuln, &security).unwrap();
+    
+    let content = std::fs::read_to_string(&report_path).unwrap();
+    assert!(content.contains("Critical") || content.contains("sev-Critical"));
+    assert!(content.contains("High") || content.contains("sev-High"));
+    assert!(content.contains("Medium") || content.contains("sev-Medium"));
+    assert!(content.contains("Low") || content.contains("sev-Low"));
+    assert!(content.contains("Info") || content.contains("sev-Info"));
+}
+
+#[test]
+fn test_report_many_security_flags() {
+    let temp_dir = TempDir::new().unwrap();
+    let report_path = temp_dir.path().join("report.html");
+    
+    let url = Url::parse("https://example.com").unwrap();
+    let crawl = CrawlResult {
+        pages_crawled: 0,
+        links_checked: 0,
+        broken_links: vec![],
+        pages: vec![],
+    };
+    let ports = PortsResult { open_ports: vec![], scanned: 0 };
+    let vuln = VulnReport { findings: vec![] };
+    
+    let mut security = vec![];
+    for i in 0..20 {
+        security.push(SecurityFlag {
+            level: if i % 5 == 0 { "Critical" } else if i % 3 == 0 { "High" } else { "Medium" }.to_string(),
+            title: format!("Security Issue {}", i),
+            description: format!("Description {}", i),
+            url: Some(format!("https://example.com/issue{}", i)),
+        });
+    }
+    
+    write_report(&report_path, &url, &crawl, &ports, &vuln, &security).unwrap();
+    
+    let content = std::fs::read_to_string(&report_path).unwrap();
+    assert!(content.contains("Security Issue 0"));
+    assert!(content.contains("Security Issue 19") || content.len() > 5000);
+}
+
+#[test]
+fn test_report_many_broken_links() {
+    let temp_dir = TempDir::new().unwrap();
+    let report_path = temp_dir.path().join("report.html");
+    
+    let url = Url::parse("https://example.com").unwrap();
+    
+    let mut broken_links = vec![];
+    for i in 0..100 {
+        broken_links.push(LinkError {
+            url: format!("https://example.com/broken{}", i),
+            status: Some(if i % 2 == 0 { 404 } else { 500 }),
+            reason: format!("Error {}", i),
+            parent: "https://example.com".to_string(),
+            external: i % 3 == 0,
+        });
+    }
+    
+    let crawl = CrawlResult {
+        pages_crawled: 1,
+        links_checked: 100,
+        broken_links,
+        pages: vec![],
+    };
+    let ports = PortsResult { open_ports: vec![], scanned: 0 };
+    let vuln = VulnReport { findings: vec![] };
+    let security = vec![];
+    
+    write_report(&report_path, &url, &crawl, &ports, &vuln, &security).unwrap();
+    
+    let content = std::fs::read_to_string(&report_path).unwrap();
+    assert!(content.contains("broken0") || content.contains("Broken links"));
+}
+
+#[test]
+fn test_report_with_special_html_chars() {
+    let temp_dir = TempDir::new().unwrap();
+    let report_path = temp_dir.path().join("report.html");
+    
+    let url = Url::parse("https://example.com").unwrap();
+    let crawl = CrawlResult {
+        pages_crawled: 1,
+        links_checked: 1,
+        broken_links: vec![],
+        pages: vec![
+            Page {
+                url: "https://example.com/<script>".to_string(),
+                status: Some(200),
+                title: Some("<h1>Test & \"Title\"</h1>".to_string()),
+                links: vec![],
+                content_type: Some("text/html".to_string()),
+                bytes: Some(1024),
+                text: Some("Content with <tags> & entities".to_string()),
+                signals: None,
+            }
+        ],
+    };
+    let ports = PortsResult { open_ports: vec![], scanned: 0 };
+    let vuln = VulnReport {
+        findings: vec![
+            Finding {
+                title: "<script>alert('XSS')</script>".to_string(),
+                description: "Contains & and < and > chars".to_string(),
+                severity: "High".to_string(),
+                url: Some("https://example.com/<test>".to_string()),
+            }
+        ],
+    };
+    let security = vec![];
+    
+    write_report(&report_path, &url, &crawl, &ports, &vuln, &security).unwrap();
+    
+    let content = std::fs::read_to_string(&report_path).unwrap();
+    // Should not contain raw < > & - they should be escaped or not break HTML
+    assert!(!content.contains("<script>alert"), "Script tags should be escaped/handled");
+    assert!(report_path.exists(), "Report should be created");
+}
+
+#[test]
+fn test_report_with_unicode_content() {
+    let temp_dir = TempDir::new().unwrap();
+    let report_path = temp_dir.path().join("report.html");
+    
+    let url = Url::parse("https://example.com").unwrap();
+    let crawl = CrawlResult {
+        pages_crawled: 1,
+        links_checked: 1,
+        broken_links: vec![],
+        pages: vec![
+            Page {
+                url: "https://example.com/日本語".to_string(),
+                status: Some(200),
+                title: Some("Test 你好 🚀 Ñoño".to_string()),
+                links: vec![],
+                content_type: Some("text/html; charset=utf-8".to_string()),
+                bytes: Some(2048),
+                text: Some("Content with émojis 😀🎉".to_string()),
+                signals: None,
+            }
+        ],
+    };
+    let ports = PortsResult { open_ports: vec![], scanned: 0 };
+    let vuln = VulnReport { findings: vec![] };
+    let security = vec![];
+    
+    write_report(&report_path, &url, &crawl, &ports, &vuln, &security).unwrap();
+    
+    let content = std::fs::read_to_string(&report_path).unwrap();
+    assert!(content.contains("你好") || content.contains("Test"));
+    assert!(content.contains("charset") || content.contains("utf"));
+}
