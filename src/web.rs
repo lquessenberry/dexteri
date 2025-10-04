@@ -1990,4 +1990,152 @@ mod tests {
         assert!(csv.contains("url,status,title,content_type,bytes"));
         assert!(csv.contains("https://example.com"));
     }
+
+    #[test]
+    fn test_csv_ports_many() {
+        let ports = PortsResult {
+            open_ports: vec![22, 80, 443, 3306, 5432, 8080, 8443],
+            scanned: 1000,
+        };
+        let csv = csv_ports(&ports);
+        assert!(csv.contains("port\n"));
+        assert!(csv.contains("22\n"));
+        assert!(csv.contains("80\n"));
+        assert!(csv.contains("443\n"));
+        assert!(csv.contains("3306\n"));
+        assert!(csv.contains("5432\n"));
+        assert!(csv.contains("8080\n"));
+        assert!(csv.contains("8443\n"));
+    }
+
+    #[test]
+    fn test_csv_escape_quote_edge_cases() {
+        // Multiple quotes in a row: """ becomes "" + "" + "" wrapped = "\"\"\"\"\"\"
+        assert_eq!(csv_escape("\"\"\""), "\"\"\"\"\"\"\"\"");
+        // Quote at start: "start becomes ""start wrapped
+        assert_eq!(csv_escape("\"start"), "\"\"\"start\"");
+        // Quote at end: end" becomes end"" wrapped
+        assert_eq!(csv_escape("end\""), "\"end\"\"\"");
+        // Mixed with comma: needs wrapping due to comma, quotes doubled
+        assert_eq!(csv_escape("a,\"b\",c"), "\"a,\"\"b\"\",c\"");
+    }
+
+    #[test]
+    fn test_csv_escape_newline_variations() {
+        // Unix newline
+        assert_eq!(csv_escape("line1\nline2"), "\"line1\nline2\"");
+        // Windows newline
+        assert_eq!(csv_escape("line1\r\nline2"), "\"line1\r\nline2\"");
+        // Mac classic newline
+        assert_eq!(csv_escape("line1\rline2"), "\"line1\rline2\"");
+        // Multiple newlines
+        assert_eq!(csv_escape("a\n\n\nb"), "\"a\n\n\nb\"");
+    }
+
+    #[test]
+    fn test_xesc_multiple_same_char() {
+        assert_eq!(xesc("<<<<"), "&lt;&lt;&lt;&lt;");
+        assert_eq!(xesc(">>>>"), "&gt;&gt;&gt;&gt;");
+        assert_eq!(xesc("&&&&"), "&amp;&amp;&amp;&amp;");
+        assert_eq!(xesc("\"\"\"\""), "&quot;&quot;&quot;&quot;");
+        assert_eq!(xesc("''''"), "&apos;&apos;&apos;&apos;");
+    }
+
+    #[test]
+    fn test_xesc_mixed_entities() {
+        // Complex mixed content
+        assert_eq!(
+            xesc("<script>alert('XSS & \"hack\"')</script>"),
+            "&lt;script&gt;alert(&apos;XSS &amp; &quot;hack&quot;&apos;)&lt;/script&gt;"
+        );
+        assert_eq!(
+            xesc("A < B && C > D || 'E' == \"F\""),
+            "A &lt; B &amp;&amp; C &gt; D || &apos;E&apos; == &quot;F&quot;"
+        );
+    }
+
+    #[test]
+    fn test_csv_findings_all_url_none() {
+        let vuln = VulnReport {
+            findings: vec![
+                Finding {
+                    title: "Finding 1".to_string(),
+                    description: "Desc 1".to_string(),
+                    severity: "High".to_string(),
+                    url: None,
+                },
+                Finding {
+                    title: "Finding 2".to_string(),
+                    description: "Desc 2".to_string(),
+                    severity: "Medium".to_string(),
+                    url: None,
+                },
+            ],
+        };
+        let csv = csv_findings(&vuln);
+        // All URLs should be empty
+        let lines: Vec<&str> = csv.lines().collect();
+        assert_eq!(lines[1].split(',').last().unwrap(), "");
+        assert_eq!(lines[2].split(',').last().unwrap(), "");
+    }
+
+    #[test]
+    fn test_csv_security_all_url_none() {
+        let sec = vec![
+            SecurityFlag {
+                level: "High".to_string(),
+                title: "Flag 1".to_string(),
+                description: "Desc 1".to_string(),
+                url: None,
+            },
+            SecurityFlag {
+                level: "Medium".to_string(),
+                title: "Flag 2".to_string(),
+                description: "Desc 2".to_string(),
+                url: None,
+            },
+        ];
+        let csv = csv_security(&sec);
+        // All URLs should be empty
+        let lines: Vec<&str> = csv.lines().collect();
+        assert_eq!(lines[1].split(',').last().unwrap(), "");
+        assert_eq!(lines[2].split(',').last().unwrap(), "");
+    }
+
+    #[test]
+    fn test_build_xml_large_dataset() {
+        let mut pages = vec![];
+        for i in 0..100 {
+            pages.push(Page {
+                url: format!("https://example.com/page{}", i),
+                status: Some(200),
+                title: Some(format!("Page {}", i)),
+                links: vec![],
+                content_type: Some("text/html".to_string()),
+                bytes: Some(1024),
+                text: None,
+                signals: None,
+            });
+        }
+        
+        let result = CombinedResult {
+            crawl: CrawlResult {
+                pages_crawled: 100,
+                links_checked: 200,
+                broken_links: vec![],
+                pages,
+            },
+            ports: PortsResult {
+                open_ports: (1..=50).collect(),
+                scanned: 10000,
+            },
+            vuln: VulnReport { findings: vec![] },
+            security: vec![],
+        };
+        
+        let xml = build_xml(&result);
+        assert!(xml.contains("pages=\"100\""));
+        assert!(xml.contains("links=\"200\""));
+        assert!(xml.contains("ports_open=\"50\""));
+    }
 }
