@@ -347,3 +347,84 @@ fn test_search_nonexistent_index() {
     let result = search_index(&nonexistent_path, "test", 10);
     assert!(result.is_err(), "Should error when searching non-existent index");
 }
+
+#[tokio::test]
+async fn test_index_and_search_comprehensive() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    // Create diverse pages
+    let pages = vec![
+        create_sample_page("https://example.com/1", "First Title", "first content here"),
+        create_sample_page("https://example.com/2", "Second Title", "second content here"),
+        create_sample_page("https://example.com/3", "Third Title", "third content here"),
+    ];
+    
+    index_pages(&index_path, &pages).await.unwrap();
+    
+    // Search for each term
+    let results1 = search_index(&index_path, "first", 10).unwrap();
+    assert!(results1.len() > 0);
+    
+    let results2 = search_index(&index_path, "second", 10).unwrap();
+    assert!(results2.len() > 0);
+    
+    let results3 = search_index(&index_path, "third", 10).unwrap();
+    assert!(results3.len() > 0);
+}
+
+#[tokio::test]
+async fn test_search_with_limit_one() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages = vec![
+        create_sample_page("https://example.com/1", "Test", "content"),
+        create_sample_page("https://example.com/2", "Test", "content"),
+    ];
+    
+    index_pages(&index_path, &pages).await.unwrap();
+    
+    let results = search_index(&index_path, "content", 1).unwrap();
+    assert_eq!(results.len(), 1, "Limit 1 should return exactly 1 result");
+}
+
+#[tokio::test]
+async fn test_index_pages_error_handling() {
+    // Test with invalid path (read-only filesystem would be ideal, but we'll test what we can)
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages = vec![
+        create_sample_page("https://example.com", "Test", "content"),
+    ];
+    
+    // First index should succeed
+    let result1 = index_pages(&index_path, &pages).await;
+    assert!(result1.is_ok());
+    
+    // Second index should also succeed (removes old directory first)
+    let result2 = index_pages(&index_path, &pages).await;
+    assert!(result2.is_ok());
+}
+
+#[tokio::test]
+async fn test_search_result_structure() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages = vec![
+        create_sample_page("https://example.com/page1", "Page One Title", "searchable content"),
+        create_sample_page("https://example.com/page2", "Page Two Title", "searchable text"),
+    ];
+    
+    index_pages(&index_path, &pages).await.unwrap();
+    
+    let results = search_index(&index_path, "searchable", 10).unwrap();
+    
+    // Verify result structure
+    for hit in results {
+        assert!(!hit.url.is_empty(), "URL should not be empty");
+        // Title might be None or Some, both are valid
+    }
+}

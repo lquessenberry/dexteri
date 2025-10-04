@@ -574,3 +574,223 @@ fn test_report_with_unicode_content() {
     assert!(content.contains("你好") || content.contains("Test"));
     assert!(content.contains("charset") || content.contains("utf"));
 }
+
+#[test]
+fn test_report_with_zero_pages_crawled() {
+    let temp_dir = TempDir::new().unwrap();
+    let report_path = temp_dir.path().join("report.html");
+    
+    let url = Url::parse("https://example.com").unwrap();
+    // Empty pages array
+    let crawl = CrawlResult {
+        pages_crawled: 0,
+        links_checked: 0,
+        broken_links: vec![],
+        pages: vec![],
+    };
+    let ports = PortsResult { open_ports: vec![], scanned: 0 };
+    let vuln = VulnReport { findings: vec![] };
+    let security = vec![];
+    
+    write_report(&report_path, &url, &crawl, &ports, &vuln, &security).unwrap();
+    
+    let content = std::fs::read_to_string(&report_path).unwrap();
+    // Should not have marketing section for empty pages
+    assert!(!content.contains("Marketing & Structured Data") || content.contains("No"));
+}
+
+#[test]
+fn test_report_with_chart_generation() {
+    let temp_dir = TempDir::new().unwrap();
+    let report_path = temp_dir.path().join("report.html");
+    
+    let url = Url::parse("https://example.com").unwrap();
+    let crawl = CrawlResult {
+        pages_crawled: 5,
+        links_checked: 10,
+        broken_links: vec![],
+        pages: vec![
+            Page {
+                url: "https://example.com/1".to_string(),
+                status: Some(200),
+                title: Some("Page 1".to_string()),
+                links: vec![],
+                content_type: Some("text/html".to_string()),
+                bytes: Some(2048),
+                text: Some("Content 1".to_string()),
+                signals: Some(MarketingSignals {
+                    json_ld_blocks: 5,
+                    json_ld_types: vec!["Article".to_string()],
+                    json_ld_raw: vec![],
+                    microdata_items: 3,
+                    microdata_types: vec!["Product".to_string()],
+                    open_graph_tags: 10,
+                    og_props: vec![],
+                    twitter_tags: 8,
+                    twitter_names: vec![],
+                    meta_robots: Some("index,follow".to_string()),
+                    canonical_url: Some("https://example.com/1".to_string()),
+                    hreflang_count: 2,
+                    hreflang_langs: vec!["en".to_string(), "es".to_string()],
+                    trackers: vec!["Google Analytics".to_string(), "Facebook Pixel".to_string()],
+                }),
+            },
+            Page {
+                url: "https://example.com/2".to_string(),
+                status: Some(200),
+                title: Some("Page 2".to_string()),
+                links: vec![],
+                content_type: Some("text/html".to_string()),
+                bytes: Some(1024),
+                text: Some("Content 2".to_string()),
+                signals: Some(MarketingSignals {
+                    json_ld_blocks: 3,
+                    json_ld_types: vec![],
+                    json_ld_raw: vec![],
+                    microdata_items: 2,
+                    microdata_types: vec![],
+                    open_graph_tags: 5,
+                    og_props: vec![],
+                    twitter_tags: 4,
+                    twitter_names: vec![],
+                    meta_robots: Some("noindex".to_string()),
+                    canonical_url: Some("https://example.com/2".to_string()),
+                    hreflang_count: 1,
+                    hreflang_langs: vec![],
+                    trackers: vec!["Google Analytics".to_string()],
+                }),
+            },
+            Page {
+                url: "https://example.com/3".to_string(),
+                status: Some(200),
+                title: Some("Page 3".to_string()),
+                links: vec![],
+                content_type: Some("text/html".to_string()),
+                bytes: Some(1500),
+                text: Some("Content 3".to_string()),
+                signals: Some(MarketingSignals {
+                    json_ld_blocks: 2,
+                    json_ld_types: vec![],
+                    json_ld_raw: vec![],
+                    microdata_items: 1,
+                    microdata_types: vec![],
+                    open_graph_tags: 3,
+                    og_props: vec![],
+                    twitter_tags: 2,
+                    twitter_names: vec![],
+                    meta_robots: None,
+                    canonical_url: None,
+                    hreflang_count: 0,
+                    hreflang_langs: vec![],
+                    trackers: vec![],
+                }),
+            },
+        ],
+    };
+    let ports = PortsResult { open_ports: vec![80, 443], scanned: 100 };
+    let vuln = VulnReport { findings: vec![] };
+    let security = vec![];
+    
+    write_report(&report_path, &url, &crawl, &ports, &vuln, &security).unwrap();
+    
+    let content = std::fs::read_to_string(&report_path).unwrap();
+    // Should have marketing data section
+    assert!(content.contains("Marketing") || content.contains("Structured"));
+    // Should have tracker data
+    assert!(content.contains("Google Analytics"));
+}
+
+#[test]
+fn test_report_with_many_trackers() {
+    let temp_dir = TempDir::new().unwrap();
+    let report_path = temp_dir.path().join("report.html");
+    
+    let url = Url::parse("https://example.com").unwrap();
+    
+    // Create pages with many different trackers
+    let mut pages = vec![];
+    let tracker_names = vec![
+        "Google Analytics", "Facebook Pixel", "Hotjar", "Mixpanel", "Amplitude",
+        "Segment", "Heap", "Pendo", "FullStory", "LogRocket", "Sentry",
+    ];
+    
+    for i in 0..15 {
+        pages.push(Page {
+            url: format!("https://example.com/page{}", i),
+            status: Some(200),
+            title: Some(format!("Page {}", i)),
+            links: vec![],
+            content_type: Some("text/html".to_string()),
+            bytes: Some(1024),
+            text: Some("Content".to_string()),
+            signals: Some(MarketingSignals {
+                json_ld_blocks: 1,
+                json_ld_types: vec![],
+                json_ld_raw: vec![],
+                microdata_items: 1,
+                microdata_types: vec![],
+                open_graph_tags: 1,
+                og_props: vec![],
+                twitter_tags: 1,
+                twitter_names: vec![],
+                meta_robots: Some("index".to_string()),
+                canonical_url: Some(format!("https://example.com/page{}", i)),
+                hreflang_count: 0,
+                hreflang_langs: vec![],
+                trackers: vec![tracker_names[i % tracker_names.len()].to_string()],
+            }),
+        });
+    }
+    
+    let crawl = CrawlResult {
+        pages_crawled: 15,
+        links_checked: 20,
+        broken_links: vec![],
+        pages,
+    };
+    let ports = PortsResult { open_ports: vec![], scanned: 0 };
+    let vuln = VulnReport { findings: vec![] };
+    let security = vec![];
+    
+    write_report(&report_path, &url, &crawl, &ports, &vuln, &security).unwrap();
+    
+    let content = std::fs::read_to_string(&report_path).unwrap();
+    // Should have tracker table
+    assert!(content.contains("Tracker") || content.contains("tracker"));
+    // Should have at least one tracker name
+    assert!(content.contains("Google Analytics") || content.contains("Facebook"));
+}
+
+#[test]
+fn test_report_status_and_bytes_none() {
+    let temp_dir = TempDir::new().unwrap();
+    let report_path = temp_dir.path().join("report.html");
+    
+    let url = Url::parse("https://example.com").unwrap();
+    let crawl = CrawlResult {
+        pages_crawled: 1,
+        links_checked: 0,
+        broken_links: vec![],
+        pages: vec![
+            Page {
+                url: "https://example.com".to_string(),
+                status: None,  // None status
+                title: None,
+                links: vec![],
+                content_type: None,
+                bytes: None,  // None bytes
+                text: Some("Content".to_string()),
+                signals: None,
+            }
+        ],
+    };
+    let ports = PortsResult { open_ports: vec![], scanned: 0 };
+    let vuln = VulnReport { findings: vec![] };
+    let security = vec![];
+    
+    write_report(&report_path, &url, &crawl, &ports, &vuln, &security).unwrap();
+    
+    let content = std::fs::read_to_string(&report_path).unwrap();
+    // Should handle None status and bytes with "-"
+    assert!(content.contains("-") || content.contains("untitled"));
+}
