@@ -1726,4 +1726,268 @@ mod tests {
         assert!(xml.contains("Missing &lt;header&gt;"));
         assert!(xml.contains("HSTS &amp; CSP"));
     }
+
+    #[test]
+    fn test_csv_pages_multiple() {
+        let crawl = CrawlResult {
+            pages_crawled: 3,
+            links_checked: 5,
+            broken_links: vec![],
+            pages: vec![
+                Page {
+                    url: "https://example.com/1".to_string(),
+                    status: Some(200),
+                    title: Some("Page 1".to_string()),
+                    links: vec![],
+                    content_type: Some("text/html".to_string()),
+                    bytes: Some(1024),
+                    text: None,
+                    signals: None,
+                },
+                Page {
+                    url: "https://example.com/2".to_string(),
+                    status: Some(404),
+                    title: None,
+                    links: vec![],
+                    content_type: None,
+                    bytes: None,
+                    text: None,
+                    signals: None,
+                },
+                Page {
+                    url: "https://example.com/3".to_string(),
+                    status: Some(200),
+                    title: Some("Page \"3\" with, comma".to_string()),
+                    links: vec![],
+                    content_type: Some("application/json".to_string()),
+                    bytes: Some(2048),
+                    text: None,
+                    signals: None,
+                },
+            ],
+        };
+        let csv = csv_pages(&crawl.pages);
+        assert!(csv.contains("https://example.com/1"));
+        assert!(csv.contains("https://example.com/2"));
+        assert!(csv.contains("https://example.com/3"));
+        assert!(csv.contains("200"));
+        assert!(csv.contains("404"));
+        assert!(csv.contains("\"Page \"\"3\"\" with, comma\""));
+    }
+
+    #[test]
+    fn test_csv_broken_multiple() {
+        let crawl = CrawlResult {
+            pages_crawled: 0,
+            links_checked: 0,
+            broken_links: vec![
+                LinkError {
+                    url: "https://example.com/broken1".to_string(),
+                    status: Some(404),
+                    reason: "Not Found".to_string(),
+                    parent: "https://example.com".to_string(),
+                    external: false,
+                },
+                LinkError {
+                    url: "https://example.com/broken2".to_string(),
+                    status: Some(500),
+                    reason: "Server Error".to_string(),
+                    parent: "https://example.com/page".to_string(),
+                    external: true,
+                },
+                LinkError {
+                    url: "https://example.com/broken3".to_string(),
+                    status: None,
+                    reason: "Timeout, connection refused".to_string(),
+                    parent: "https://example.com".to_string(),
+                    external: false,
+                },
+            ],
+            pages: vec![],
+        };
+        let csv = csv_broken(&crawl.broken_links);
+        assert!(csv.contains("404"));
+        assert!(csv.contains("500"));
+        assert!(csv.contains("Not Found"));
+        assert!(csv.contains("Server Error"));
+        assert!(csv.contains("true"));
+        assert!(csv.contains("false"));
+        assert!(csv.contains("\"Timeout, connection refused\""));
+    }
+
+    #[test]
+    fn test_csv_findings_multiple() {
+        let vuln = VulnReport {
+            findings: vec![
+                Finding {
+                    title: "XSS Vulnerability".to_string(),
+                    description: "Script injection found".to_string(),
+                    severity: "High".to_string(),
+                    url: Some("https://example.com/page1".to_string()),
+                },
+                Finding {
+                    title: "CSRF Token Missing".to_string(),
+                    description: "Form lacks protection".to_string(),
+                    severity: "Medium".to_string(),
+                    url: None,
+                },
+                Finding {
+                    title: "Info: Debug Mode".to_string(),
+                    description: "Debug, enabled".to_string(),
+                    severity: "Low".to_string(),
+                    url: Some("https://example.com/admin".to_string()),
+                },
+            ],
+        };
+        let csv = csv_findings(&vuln);
+        assert!(csv.contains("XSS Vulnerability"));
+        assert!(csv.contains("CSRF Token Missing"));
+        assert!(csv.contains("High"));
+        assert!(csv.contains("Medium"));
+        assert!(csv.contains("Low"));
+        assert!(csv.contains("\"Debug, enabled\""));
+    }
+
+    #[test]
+    fn test_csv_security_multiple() {
+        let sec = vec![
+            SecurityFlag {
+                level: "Critical".to_string(),
+                title: "No HTTPS".to_string(),
+                description: "Site uses HTTP".to_string(),
+                url: Some("http://example.com".to_string()),
+            },
+            SecurityFlag {
+                level: "High".to_string(),
+                title: "Missing CSP".to_string(),
+                description: "Content-Security-Policy not set".to_string(),
+                url: Some("https://example.com".to_string()),
+            },
+            SecurityFlag {
+                level: "Medium".to_string(),
+                title: "Weak Cookie".to_string(),
+                description: "Cookie: session, HttpOnly missing".to_string(),
+                url: None,
+            },
+        ];
+        let csv = csv_security(&sec);
+        assert!(csv.contains("Critical"));
+        assert!(csv.contains("High"));
+        assert!(csv.contains("Medium"));
+        assert!(csv.contains("No HTTPS"));
+        assert!(csv.contains("Missing CSP"));
+        assert!(csv.contains("\"Cookie: session, HttpOnly missing\""));
+    }
+
+    #[test]
+    fn test_build_xml_comprehensive() {
+        let result = CombinedResult {
+            crawl: CrawlResult {
+                pages_crawled: 2,
+                links_checked: 5,
+                broken_links: vec![LinkError {
+                    url: "https://example.com/404".to_string(),
+                    status: Some(404),
+                    reason: "Not Found".to_string(),
+                    parent: "https://example.com".to_string(),
+                    external: false,
+                }],
+                pages: vec![
+                    Page {
+                        url: "https://example.com".to_string(),
+                        status: Some(200),
+                        title: Some("Home".to_string()),
+                        links: vec![],
+                        content_type: Some("text/html".to_string()),
+                        bytes: Some(1024),
+                        text: None,
+                        signals: None,
+                    },
+                ],
+            },
+            ports: PortsResult {
+                open_ports: vec![80, 443, 8080],
+                scanned: 1000,
+            },
+            vuln: VulnReport {
+                findings: vec![Finding {
+                    title: "SQL Injection".to_string(),
+                    description: "Param vulnerable".to_string(),
+                    severity: "Critical".to_string(),
+                    url: Some("https://example.com/search".to_string()),
+                }],
+            },
+            security: vec![SecurityFlag {
+                level: "High".to_string(),
+                title: "HSTS Missing".to_string(),
+                description: "No HSTS header".to_string(),
+                url: Some("https://example.com".to_string()),
+            }],
+        };
+        let xml = build_xml(&result);
+        
+        // Check all sections present
+        assert!(xml.contains("pages=\"2\""));
+        assert!(xml.contains("links=\"5\""));
+        assert!(xml.contains("broken=\"1\""));
+        assert!(xml.contains("ports_open=\"3\""));
+        assert!(xml.contains("findings=\"1\""));
+        
+        // Check specific content
+        assert!(xml.contains("<open>80</open>"));
+        assert!(xml.contains("<open>443</open>"));
+        assert!(xml.contains("<open>8080</open>"));
+        assert!(xml.contains("SQL Injection"));
+        assert!(xml.contains("HSTS Missing"));
+    }
+
+    #[test]
+    fn test_csv_escape_edge_cases() {
+        // Test all edge cases together
+        assert_eq!(csv_escape(""), "");
+        assert_eq!(csv_escape("normal text"), "normal text");
+        assert_eq!(csv_escape("text,with,commas"), "\"text,with,commas\"");
+        assert_eq!(csv_escape("text\"with\"quotes"), "\"text\"\"with\"\"quotes\"");
+        assert_eq!(csv_escape("text\nwith\nnewlines"), "\"text\nwith\nnewlines\"");
+        assert_eq!(csv_escape("text\rwith\rreturns"), "\"text\rwith\rreturns\"");
+        assert_eq!(csv_escape("text,with\"all\nspecial\rchars"), "\"text,with\"\"all\nspecial\rchars\"");
+    }
+
+    #[test]
+    fn test_xesc_comprehensive() {
+        // Test all XML escape sequences
+        assert_eq!(xesc("normal"), "normal");
+        assert_eq!(xesc(""), "");
+        assert_eq!(xesc("<tag>"), "&lt;tag&gt;");
+        assert_eq!(xesc("&amp;"), "&amp;amp;");
+        assert_eq!(xesc("\"quote\""), "&quot;quote&quot;");
+        assert_eq!(xesc("'apostrophe'"), "&apos;apostrophe&apos;");
+        assert_eq!(xesc("<>&\"'"), "&lt;&gt;&amp;&quot;&apos;");
+        assert_eq!(xesc("normal < special > text & more"), "normal &lt; special &gt; text &amp; more");
+    }
+
+    #[test]
+    fn test_csv_pages_all_none_fields() {
+        let crawl = CrawlResult {
+            pages_crawled: 1,
+            links_checked: 0,
+            broken_links: vec![],
+            pages: vec![
+                Page {
+                    url: "https://example.com".to_string(),
+                    status: None,
+                    title: None,
+                    links: vec![],
+                    content_type: None,
+                    bytes: None,
+                    text: None,
+                    signals: None,
+                },
+            ],
+        };
+        let csv = csv_pages(&crawl.pages);
+        // Should handle all None fields gracefully
+        assert!(csv.contains("url,status,title,content_type,bytes"));
+        assert!(csv.contains("https://example.com"));
+    }
 }
