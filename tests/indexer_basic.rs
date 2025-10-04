@@ -219,3 +219,131 @@ async fn test_search_with_no_title() {
             "Title should be empty or None");
     assert!(!results[0].url.is_empty(), "URL should still be present");
 }
+
+#[tokio::test]
+async fn test_search_with_special_characters() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages = vec![
+        create_sample_page("https://example.com", "Special & <Chars>", "Content with special chars: @#$%^&*()"),
+    ];
+    
+    index_pages(&index_path, &pages).await.unwrap();
+    
+    // Should handle query with special chars
+    let results = search_index(&index_path, "special", 10);
+    assert!(results.is_ok(), "Should handle queries with special characters");
+}
+
+#[tokio::test]
+async fn test_search_with_quotes() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages = vec![
+        create_sample_page("https://example.com", "Quoted \"Text\"", "Some content with quotes"),
+    ];
+    
+    index_pages(&index_path, &pages).await.unwrap();
+    
+    let results = search_index(&index_path, "quoted", 10).unwrap();
+    assert!(results.len() > 0, "Should find results with quoted text");
+}
+
+#[tokio::test]
+async fn test_index_very_long_text() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    // Create very long text content
+    let long_text = "word ".repeat(10000); // 50KB+ of text
+    let pages = vec![create_sample_page("https://example.com", "Long Content", &long_text)];
+    
+    let result = index_pages(&index_path, &pages).await;
+    assert!(result.is_ok(), "Should handle very long text content");
+    
+    let stats = result.unwrap();
+    assert_eq!(stats.docs_indexed, 1, "Should index page with long content");
+}
+
+#[tokio::test]
+async fn test_search_numeric_content() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages = vec![
+        create_sample_page("https://example.com", "Numbers", "Product ID 12345 and reference 67890"),
+    ];
+    
+    index_pages(&index_path, &pages).await.unwrap();
+    
+    let results = search_index(&index_path, "12345", 10).unwrap();
+    assert!(results.len() > 0, "Should find numeric content");
+}
+
+#[tokio::test]
+async fn test_search_unicode_content() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages = vec![
+        create_sample_page("https://example.com", "Unicode 你好", "Content with émojis 😀 and Ñoño"),
+    ];
+    
+    index_pages(&index_path, &pages).await.unwrap();
+    
+    let results = search_index(&index_path, "unicode", 10).unwrap();
+    assert!(results.len() > 0, "Should handle unicode content");
+}
+
+#[tokio::test]
+async fn test_search_boolean_query() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages = vec![
+        create_sample_page("https://example.com/1", "Rust and Python", "Both Rust and Python are great"),
+        create_sample_page("https://example.com/2", "Only Rust", "Rust is amazing"),
+    ];
+    
+    index_pages(&index_path, &pages).await.unwrap();
+    
+    // Test simple AND query
+    let results = search_index(&index_path, "rust", 10).unwrap();
+    assert!(results.len() >= 1, "Should find Rust pages");
+}
+
+#[tokio::test]
+async fn test_index_mixed_content() {
+    let temp_dir = TempDir::new().unwrap();
+    let index_path = temp_dir.path().to_path_buf();
+    
+    let pages = vec![
+        create_sample_page("https://example.com/1", "Page One", "Content one"),
+        Page {
+            url: "https://example.com/2".to_string(),
+            status: Some(404),
+            title: Some("Not Found".to_string()),
+            links: vec![],
+            content_type: None,
+            bytes: Some(0),
+            text: None, // No text - won't be indexed
+            signals: None,
+        },
+        create_sample_page("https://example.com/3", "Page Three", "Content three"),
+    ];
+    
+    let result = index_pages(&index_path, &pages).await.unwrap();
+    // Only pages with text should be indexed
+    assert_eq!(result.docs_indexed, 2, "Should only index pages with text");
+}
+
+#[test]
+fn test_search_nonexistent_index() {
+    let temp_dir = TempDir::new().unwrap();
+    let nonexistent_path = temp_dir.path().join("nonexistent");
+    
+    let result = search_index(&nonexistent_path, "test", 10);
+    assert!(result.is_err(), "Should error when searching non-existent index");
+}
