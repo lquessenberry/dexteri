@@ -1296,3 +1296,434 @@ static CHARTS_HTML: &str = r###"<!doctype html>
 </body>
 </html>
 "###;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_csv_escape_no_special_chars() {
+        assert_eq!(csv_escape("simple"), "simple");
+        assert_eq!(csv_escape("test123"), "test123");
+    }
+
+    #[test]
+    fn test_csv_escape_with_comma() {
+        assert_eq!(csv_escape("hello, world"), "\"hello, world\"");
+    }
+
+    #[test]
+    fn test_csv_escape_with_quotes() {
+        assert_eq!(csv_escape("say \"hello\""), "\"say \"\"hello\"\"\"");
+    }
+
+    #[test]
+    fn test_csv_escape_with_newline() {
+        assert_eq!(csv_escape("line1\nline2"), "\"line1\nline2\"");
+    }
+
+    #[test]
+    fn test_csv_escape_with_carriage_return() {
+        assert_eq!(csv_escape("line1\rline2"), "\"line1\rline2\"");
+    }
+
+    #[test]
+    fn test_csv_escape_multiple_special_chars() {
+        assert_eq!(csv_escape("a,b\"c\nd"), "\"a,b\"\"c\nd\"");
+    }
+
+    #[test]
+    fn test_csv_pages_empty() {
+        let pages = vec![];
+        let csv = csv_pages(&pages);
+        assert_eq!(csv, "url,status,title,content_type,bytes\n");
+    }
+
+    #[test]
+    fn test_csv_pages_single() {
+        let pages = vec![Page {
+            url: "https://example.com".to_string(),
+            status: Some(200),
+            title: Some("Test".to_string()),
+            links: vec![],
+            content_type: Some("text/html".to_string()),
+            bytes: Some(1024),
+            text: None,
+            signals: None,
+        }];
+        let csv = csv_pages(&pages);
+        assert!(csv.contains("https://example.com"));
+        assert!(csv.contains("200"));
+        assert!(csv.contains("Test"));
+        assert!(csv.contains("text/html"));
+        assert!(csv.contains("1024"));
+    }
+
+    #[test]
+    fn test_csv_pages_with_special_chars() {
+        let pages = vec![Page {
+            url: "https://example.com".to_string(),
+            status: Some(200),
+            title: Some("Test, \"Page\"".to_string()),
+            links: vec![],
+            content_type: Some("text/html".to_string()),
+            bytes: Some(1024),
+            text: None,
+            signals: None,
+        }];
+        let csv = csv_pages(&pages);
+        assert!(csv.contains("\"Test, \"\"Page\"\"\""));
+    }
+
+    #[test]
+    fn test_csv_pages_without_optional_fields() {
+        let pages = vec![Page {
+            url: "https://example.com".to_string(),
+            status: None,
+            title: None,
+            links: vec![],
+            content_type: None,
+            bytes: None,
+            text: None,
+            signals: None,
+        }];
+        let csv = csv_pages(&pages);
+        let lines: Vec<&str> = csv.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert!(lines[1].contains("https://example.com"));
+    }
+
+    #[test]
+    fn test_csv_broken_empty() {
+        let errs = vec![];
+        let csv = csv_broken(&errs);
+        assert_eq!(csv, "url,status,reason,parent,external\n");
+    }
+
+    #[test]
+    fn test_csv_broken_single() {
+        let errs = vec![LinkError {
+            url: "https://example.com/404".to_string(),
+            status: Some(404),
+            reason: "Not Found".to_string(),
+            parent: "https://example.com".to_string(),
+            external: true,
+        }];
+        let csv = csv_broken(&errs);
+        assert!(csv.contains("404"));
+        assert!(csv.contains("Not Found"));
+        assert!(csv.contains("true"));
+    }
+
+    #[test]
+    fn test_csv_broken_with_special_chars() {
+        let errs = vec![LinkError {
+            url: "https://example.com/broken".to_string(),
+            status: None,
+            reason: "Timeout, \"connection failed\"".to_string(),
+            parent: "https://example.com".to_string(),
+            external: false,
+        }];
+        let csv = csv_broken(&errs);
+        assert!(csv.contains("\"Timeout, \"\"connection failed\"\"\""));
+        assert!(csv.contains("false"));
+    }
+
+    #[test]
+    fn test_csv_ports_empty() {
+        let ports = PortsResult {
+            open_ports: vec![],
+            scanned: 0,
+        };
+        let csv = csv_ports(&ports);
+        assert_eq!(csv, "port\n");
+    }
+
+    #[test]
+    fn test_csv_ports_multiple() {
+        let ports = PortsResult {
+            open_ports: vec![80, 443, 8080],
+            scanned: 1000,
+        };
+        let csv = csv_ports(&ports);
+        assert!(csv.contains("80\n"));
+        assert!(csv.contains("443\n"));
+        assert!(csv.contains("8080\n"));
+    }
+
+    #[test]
+    fn test_csv_findings_empty() {
+        let vuln = VulnReport {
+            findings: vec![],
+        };
+        let csv = csv_findings(&vuln);
+        assert_eq!(csv, "title,description,severity,url\n");
+    }
+
+    #[test]
+    fn test_csv_findings_single() {
+        let vuln = VulnReport {
+            findings: vec![Finding {
+                title: "SQL Injection".to_string(),
+                description: "Found vuln".to_string(),
+                severity: "High".to_string(),
+                url: Some("https://example.com/api".to_string()),
+            }],
+        };
+        let csv = csv_findings(&vuln);
+        assert!(csv.contains("SQL Injection"));
+        assert!(csv.contains("High"));
+        assert!(csv.contains("https://example.com/api"));
+    }
+
+    #[test]
+    fn test_csv_findings_with_special_chars() {
+        let vuln = VulnReport {
+            findings: vec![Finding {
+                title: "XSS: <script>".to_string(),
+                description: "Found \"issue\" & needs fix".to_string(),
+                severity: "Critical".to_string(),
+                url: None,
+            }],
+        };
+        let csv = csv_findings(&vuln);
+        // Colon and brackets don't need CSV escaping, only quotes
+        assert!(csv.contains("XSS: <script>"));
+        assert!(csv.contains("\"Found \"\"issue\"\" & needs fix\""));
+    }
+
+    #[test]
+    fn test_csv_security_empty() {
+        let sec = vec![];
+        let csv = csv_security(&sec);
+        assert_eq!(csv, "level,title,description,url\n");
+    }
+
+    #[test]
+    fn test_csv_security_single() {
+        let sec = vec![SecurityFlag {
+            level: "High".to_string(),
+            title: "Missing HSTS".to_string(),
+            description: "No HSTS header".to_string(),
+            url: Some("https://example.com".to_string()),
+        }];
+        let csv = csv_security(&sec);
+        assert!(csv.contains("High"));
+        assert!(csv.contains("Missing HSTS"));
+    }
+
+    #[test]
+    fn test_csv_security_with_special_chars() {
+        let sec = vec![SecurityFlag {
+            level: "Medium".to_string(),
+            title: "Header: X-Frame".to_string(),
+            description: "Uses \"DENY\" & blocks <iframe>".to_string(),
+            url: Some("https://example.com".to_string()),
+        }];
+        let csv = csv_security(&sec);
+        // Colon and brackets don't need CSV escaping, only quotes
+        assert!(csv.contains("Header: X-Frame"));
+        assert!(csv.contains("\"Uses \"\"DENY\"\" & blocks <iframe>\""));
+    }
+
+    #[test]
+    fn test_xesc_basic() {
+        assert_eq!(xesc("simple"), "simple");
+    }
+
+    #[test]
+    fn test_xesc_ampersand() {
+        assert_eq!(xesc("a & b"), "a &amp; b");
+    }
+
+    #[test]
+    fn test_xesc_less_than() {
+        assert_eq!(xesc("<tag>"), "&lt;tag&gt;");
+    }
+
+    #[test]
+    fn test_xesc_quotes() {
+        assert_eq!(xesc("say \"hello\""), "say &quot;hello&quot;");
+    }
+
+    #[test]
+    fn test_xesc_apostrophe() {
+        assert_eq!(xesc("it's"), "it&apos;s");
+    }
+
+    #[test]
+    fn test_xesc_all_special_chars() {
+        assert_eq!(xesc("<a & \"b\" 'c'>"), "&lt;a &amp; &quot;b&quot; &apos;c&apos;&gt;");
+    }
+
+    #[test]
+    fn test_build_xml_empty() {
+        let result = CombinedResult {
+            crawl: CrawlResult {
+                pages_crawled: 0,
+                links_checked: 0,
+                broken_links: vec![],
+                pages: vec![],
+            },
+            ports: PortsResult {
+                open_ports: vec![],
+                scanned: 0,
+            },
+            vuln: VulnReport {
+                findings: vec![],
+            },
+            security: vec![],
+        };
+        let xml = build_xml(&result);
+        assert!(xml.contains("<?xml version=\"1.0\""));
+        assert!(xml.contains("<dexteri>"));
+        assert!(xml.contains("</dexteri>"));
+        assert!(xml.contains("pages=\"0\""));
+    }
+
+    #[test]
+    fn test_build_xml_with_page() {
+        let result = CombinedResult {
+            crawl: CrawlResult {
+                pages_crawled: 1,
+                links_checked: 5,
+                broken_links: vec![],
+                pages: vec![Page {
+                    url: "https://example.com".to_string(),
+                    status: Some(200),
+                    title: Some("Test <Page>".to_string()),
+                    links: vec![],
+                    content_type: Some("text/html".to_string()),
+                    bytes: Some(1024),
+                    text: None,
+                    signals: None,
+                }],
+            },
+            ports: PortsResult {
+                open_ports: vec![],
+                scanned: 0,
+            },
+            vuln: VulnReport {
+                findings: vec![],
+            },
+            security: vec![],
+        };
+        let xml = build_xml(&result);
+        assert!(xml.contains("pages=\"1\""));
+        assert!(xml.contains("links=\"5\""));
+        assert!(xml.contains("Test &lt;Page&gt;"));
+        assert!(xml.contains("status=\"200\""));
+    }
+
+    #[test]
+    fn test_build_xml_with_broken_link() {
+        let result = CombinedResult {
+            crawl: CrawlResult {
+                pages_crawled: 0,
+                links_checked: 1,
+                broken_links: vec![LinkError {
+                    url: "https://example.com/404".to_string(),
+                    status: Some(404),
+                    reason: "Not Found & \"error\"".to_string(),
+                    parent: "https://example.com".to_string(),
+                    external: true,
+                }],
+                pages: vec![],
+            },
+            ports: PortsResult {
+                open_ports: vec![],
+                scanned: 0,
+            },
+            vuln: VulnReport {
+                findings: vec![],
+            },
+            security: vec![],
+        };
+        let xml = build_xml(&result);
+        assert!(xml.contains("broken=\"1\""));
+        assert!(xml.contains("external=\"true\""));
+        assert!(xml.contains("Not Found &amp; &quot;error&quot;"));
+    }
+
+    #[test]
+    fn test_build_xml_with_ports() {
+        let result = CombinedResult {
+            crawl: CrawlResult {
+                pages_crawled: 0,
+                links_checked: 0,
+                broken_links: vec![],
+                pages: vec![],
+            },
+            ports: PortsResult {
+                open_ports: vec![80, 443],
+                scanned: 1000,
+            },
+            vuln: VulnReport {
+                findings: vec![],
+            },
+            security: vec![],
+        };
+        let xml = build_xml(&result);
+        assert!(xml.contains("ports_open=\"2\""));
+        assert!(xml.contains("<open>80</open>"));
+        assert!(xml.contains("<open>443</open>"));
+    }
+
+    #[test]
+    fn test_build_xml_with_finding() {
+        let result = CombinedResult {
+            crawl: CrawlResult {
+                pages_crawled: 0,
+                links_checked: 0,
+                broken_links: vec![],
+                pages: vec![],
+            },
+            ports: PortsResult {
+                open_ports: vec![],
+                scanned: 0,
+            },
+            vuln: VulnReport {
+                findings: vec![Finding {
+                    title: "XSS <script>".to_string(),
+                    description: "Found \"issue\" & fix".to_string(),
+                    severity: "High".to_string(),
+                    url: Some("https://example.com".to_string()),
+                }],
+            },
+            security: vec![],
+        };
+        let xml = build_xml(&result);
+        assert!(xml.contains("findings=\"1\""));
+        assert!(xml.contains("XSS &lt;script&gt;"));
+        assert!(xml.contains("Found &quot;issue&quot; &amp; fix"));
+    }
+
+    #[test]
+    fn test_build_xml_with_security_flag() {
+        let result = CombinedResult {
+            crawl: CrawlResult {
+                pages_crawled: 0,
+                links_checked: 0,
+                broken_links: vec![],
+                pages: vec![],
+            },
+            ports: PortsResult {
+                open_ports: vec![],
+                scanned: 0,
+            },
+            vuln: VulnReport {
+                findings: vec![],
+            },
+            security: vec![SecurityFlag {
+                level: "High".to_string(),
+                title: "Missing <header>".to_string(),
+                description: "HSTS & CSP".to_string(),
+                url: Some("https://example.com".to_string()),
+            }],
+        };
+        let xml = build_xml(&result);
+        assert!(xml.contains("level=\"High\""));
+        assert!(xml.contains("Missing &lt;header&gt;"));
+        assert!(xml.contains("HSTS &amp; CSP"));
+    }
+}
