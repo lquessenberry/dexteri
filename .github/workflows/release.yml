@@ -43,7 +43,7 @@ jobs:
 
       - name: Build (release)
         run: |
-          cargo build --release --bin dexteri --bin dexteri-gui
+          cargo build --release --bin dexteri --bin dexteri-cli
 
       - name: Package AppImage
         run: |
@@ -54,7 +54,7 @@ jobs:
         run: |
           cd target/release
           sha256sum dexteri > dexteri.sha256
-          sha256sum dexteri-gui > dexteri-gui.sha256
+          sha256sum dexteri-cli > dexteri-cli.sha256
           cd -
           cd packaging/appimage
           sha256sum Dexteri-x86_64.AppImage > Dexteri-x86_64.AppImage.sha256
@@ -66,9 +66,9 @@ jobs:
           name: dexteri-linux-x86_64
           path: |
             target/release/dexteri
-            target/release/dexteri-gui
+            target/release/dexteri-cli
             target/release/dexteri.sha256
-            target/release/dexteri-gui.sha256
+            target/release/dexteri-cli.sha256
             packaging/appimage/Dexteri-x86_64.AppImage
             packaging/appimage/Dexteri-x86_64.AppImage.sha256
 
@@ -78,9 +78,9 @@ jobs:
         with:
           files: |
             target/release/dexteri
-            target/release/dexteri-gui
+            target/release/dexteri-cli
             target/release/dexteri.sha256
-            target/release/dexteri-gui.sha256
+            target/release/dexteri-cli.sha256
             packaging/appimage/Dexteri-x86_64.AppImage
             packaging/appimage/Dexteri-x86_64.AppImage.sha256
           generate_release_notes: true

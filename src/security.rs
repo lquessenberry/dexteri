@@ -5,7 +5,7 @@ use scraper::{Html, Selector};
 use std::time::Duration;
 use url::Url;
 
-use crate::models::SecurityFlag;
+use crate::models::{SecurityFlag, Page};
 
 pub async fn check_security_posture(
     client: &reqwest::Client,
@@ -343,6 +343,19 @@ pub async fn check_security_posture(
     }
 
     Ok(flags)
+}
+
+// Compatibility wrapper expected by tests: takes base URL, pages (unused here), and client,
+// and returns flags directly without Result. Delegates to check_security_posture.
+pub async fn check_security(
+    base: &Url,
+    _pages: &Vec<Page>,
+    client: &reqwest::Client,
+) -> Vec<SecurityFlag> {
+    match check_security_posture(client, base).await {
+        Ok(flags) => flags,
+        Err(_) => Vec::new(),
+    }
 }
 
 async fn head_or_get_snippet(

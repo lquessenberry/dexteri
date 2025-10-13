@@ -69,4 +69,4 @@ else
   echo "WARNING: javascriptcoregtk-4.0 not detected (libjavascriptcoregtk-4.0-dev). Some builds may fail without it."
 fi
 
-echo "All set. You can now build the Tauri GUI: cargo build --release --bin dexteri-gui or cargo tauri build"
+echo "All set. You can now build the Tauri GUI: cargo build --release --bin dexteri or cargo tauri build"

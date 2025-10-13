@@ -27,27 +27,27 @@ rustup update stable && rustup default stable
 cargo build --release
 
 # run help
-./target/release/dexteri --help
+./target/release/dexteri-cli --help
 ```
 
 ## Quickstart
 
 ```bash
 # Crawl and write an HTML report
-./target/release/dexteri crawl https://example.com -d 2 -c 32 --externals --report report.html
+./target/release/dexteri-cli crawl https://example.com -d 2 -c 32 --externals --report report.html
 
 # Port scan common ports on a host
-./target/release/dexteri ports example.com -p 1-1024,3306,5432 --concurrency 800 --timeout-ms 600
+./target/release/dexteri-cli ports example.com -p 1-1024,3306,5432 --concurrency 800 --timeout-ms 600
 
 # Basic vuln checks
-./target/release/dexteri vuln https://example.com
+./target/release/dexteri-cli vuln https://example.com
 
 # All-in-one and write a single report
-./target/release/dexteri all https://example.com -p 1-1024,3306 -o report.html --externals -d 2
+./target/release/dexteri-cli all https://example.com -p 1-1024,3306 -o report.html --externals -d 2
 
 # Index then search
-./target/release/dexteri index https://example.com -o dexteri-index -d 2
-./target/release/dexteri search -i dexteri-index "contact OR support"
+./target/release/dexteri-cli index https://example.com -o dexteri-index -d 2
+./target/release/dexteri-cli search -i dexteri-index "contact OR support"
 ```
 
 ## Desktop (Tauri) GUI
@@ -69,8 +69,8 @@ chmod +x scripts/install-tauri-deps.sh
 Build and run the GUI:
 
 ```bash
-cargo build --release --bin dexteri-gui
-./target/release/dexteri-gui
+cargo build --release --bin dexteri
+./target/release/dexteri
 ```
 
 Notes:
@@ -89,7 +89,7 @@ Build the AppImage:
 
 ```bash
 # build the binary first
-cargo build --release --bin dexteri --bin dexteri-gui
+cargo build --release --bin dexteri --bin dexteri-cli
 
 # make the script executable and run it
 chmod +x packaging/appimage/build_appimage.sh
@@ -98,7 +98,7 @@ chmod +x packaging/appimage/build_appimage.sh
 # output: packaging/appimage/Dexteri-x86_64.AppImage
 ```
 
-The AppImage launches the desktop GUI (`dexteri-gui`) by default. The CLI (`dexteri`) is also included inside the AppImage under `usr/bin/`.
+The AppImage launches the desktop GUI (`dexteri`) by default. The CLI (`dexteri-cli`) is also included inside the AppImage under `usr/bin/`.
 
 ## Donationware
 Dexteri++ is MIT-licensed. If it saves you time or money, consider tossing a donation to support development.

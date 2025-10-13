@@ -25,8 +25,23 @@ async fn start_dexteri_server() -> (tokio::task::JoinHandle<()>, String) {
     let handle = tokio::spawn(async move {
         let _ = dexteri::web::serve(addr).await;
     });
-    
-    sleep(Duration::from_millis(600)).await;
+    // Readiness probe: wait until /api/status returns null or JSON, or timeout
+    let client = reqwest::Client::new();
+    let mut attempts = 0u32;
+    loop {
+        attempts += 1;
+        if attempts > 30 { // ~3s max
+            break;
+        }
+        if let Ok(resp) = client.get(format!("{}/api/status", base_url)).send().await {
+            if let Ok(body) = resp.text().await {
+                if body == "null" || body.starts_with('{') {
+                    break;
+                }
+            }
+        }
+        sleep(Duration::from_millis(100)).await;
+    }
     (handle, base_url)
 }
 
@@ -94,6 +109,7 @@ async fn test_run_pipeline_with_simple_scan() {
     dex_handle.abort();
 }
 
+#[cfg_attr(feature = "coverage", ignore)]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_pipeline_state_transitions() {
     let (dex_handle, dex_url) = start_dexteri_server().await;

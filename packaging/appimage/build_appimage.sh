@@ -6,27 +6,27 @@ set -euo pipefail
 
 APPDIR="packaging/appimage/Dexteri.AppDir"
 APPNAME="Dexteri"
-BINARY_CLI="target/release/dexteri"
-BINARY_GUI="target/release/dexteri-gui"
+BINARY_CLI="target/release/dexteri-cli"
+BINARY_GUI="target/release/dexteri"
 DESKTOP="packaging/appimage/dexteri.desktop"
 APPRUN_SRC="packaging/appimage/AppRun"
 ICON_SRC_SVG="packaging/appimage/dexteri.svg"
 
 if [ ! -f "$BINARY_CLI" ]; then
-  echo "CLI binary not found at $BINARY_CLI. Build first: cargo build --release" >&2
+  echo "CLI binary not found at $BINARY_CLI. Build first: cargo build --release --bin dexteri-cli" >&2
   exit 1
 fi
 
 if [ ! -f "$BINARY_GUI" ]; then
-  echo "GUI binary not found at $BINARY_GUI. Build first: cargo build --release --bin dexteri-gui" >&2
+  echo "GUI binary not found at $BINARY_GUI. Build first: cargo build --release --bin dexteri" >&2
   exit 1
 fi
 
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/applications" "$APPDIR/usr/share/icons/hicolor/256x256/apps" "$APPDIR/usr/share/icons/hicolor/scalable/apps"
 
-install -m 0755 "$BINARY_CLI" "$APPDIR/usr/bin/dexteri"
-install -m 0755 "$BINARY_GUI" "$APPDIR/usr/bin/dexteri-gui"
+install -m 0755 "$BINARY_CLI" "$APPDIR/usr/bin/dexteri-cli"
+install -m 0755 "$BINARY_GUI" "$APPDIR/usr/bin/dexteri"
 install -m 0644 "$DESKTOP" "$APPDIR/$APPNAME.desktop"
 install -m 0755 "$APPRUN_SRC" "$APPDIR/AppRun"
 # Include GUI assets and config for reference/runtime use

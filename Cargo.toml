@@ -44,6 +44,7 @@ zip = { version = "0.6", default-features = false, features = ["deflate"] }
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+coverage = []
 
 [build-dependencies]
 tauri-build = { version = "1", features = [] }

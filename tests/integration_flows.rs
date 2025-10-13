@@ -212,7 +212,11 @@ async fn test_util_functions_integration() {
     
     // Test build_client
     let client = util::build_client().unwrap();
-    assert!(client.get("https://httpbin.org/status/200").send().await.is_ok());
+    // Use local server instead of external network dependency
+    let app = Router::new().route("/status/200", get(|| async { StatusCode::OK }));
+    let (addr, _handle) = serve(app).await;
+    let ok_url = format!("http://{}/status/200", addr);
+    assert!(client.get(&ok_url).send().await.is_ok());
     
     // Test URL sanitization
     let url1 = Url::parse("http://example.com/path?query=1#fragment").unwrap();

@@ -87,12 +87,16 @@ pub async fn serve(bind: SocketAddr) -> anyhow::Result<()> {
         .route("/", get(index))
         .route("/api/status", get(get_status))
         .route("/api/results.json", get(get_results_json))
+        // Aliases to satisfy external tests/clients
+        .route("/api/results", get(get_results_json))
         .route("/api/pages", get(get_pages))
         .route("/api/marketing", get(get_marketing))
         .route("/api/techstack", get(get_techstack))
         .route("/api/export", get(export_data))
         .route("/api/run/all", post(run_all))
+        .route("/api/run", post(run_all))
         .route("/api/run/multi", post(run_multi))
+        .route("/api/run-multi", post(run_multi))
         .route("/report", get(get_report))
         .route("/charts", get(charts))
         .with_state(state);
@@ -313,8 +317,12 @@ async fn index() -> impl IntoResponse {
 
 async fn get_status(State(state): State<AppState>) -> impl IntoResponse {
     let inner = state.inner.read().await;
-    let body = serde_json::to_string(&inner.status).unwrap_or("null".to_string());
-    (StatusCode::OK, body)
+    if let Some(st) = &inner.status {
+        let body = serde_json::to_string(st).unwrap_or_else(|_| "{}".to_string());
+        (StatusCode::OK, body)
+    } else {
+        (StatusCode::OK, "null".to_string())
+    }
 }
 
 async fn get_report(State(state): State<AppState>) -> impl IntoResponse {
@@ -577,7 +585,7 @@ async fn export_data(
     }
 }
 
-fn csv_escape(s: &str) -> String {
+pub(crate) fn csv_escape(s: &str) -> String {
     let needs = s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r');
     if needs {
         format!("\"{}\"", s.replace('"', "\"\""))
@@ -586,7 +594,7 @@ fn csv_escape(s: &str) -> String {
     }
 }
 
-fn csv_pages(pages: &Vec<Page>) -> String {
+pub(crate) fn csv_pages(pages: &Vec<Page>) -> String {
     let mut out = String::from("url,status,title,content_type,bytes\n");
     for p in pages {
         let url = csv_escape(&p.url);
@@ -599,7 +607,7 @@ fn csv_pages(pages: &Vec<Page>) -> String {
     out
 }
 
-fn csv_broken(errs: &Vec<LinkError>) -> String {
+pub(crate) fn csv_broken(errs: &Vec<LinkError>) -> String {
     let mut out = String::from("url,status,reason,parent,external\n");
     for e in errs {
         let url = csv_escape(&e.url);
@@ -615,7 +623,7 @@ fn csv_broken(errs: &Vec<LinkError>) -> String {
     out
 }
 
-fn csv_ports(p: &PortsResult) -> String {
+pub(crate) fn csv_ports(p: &PortsResult) -> String {
     let mut out = String::from("port\n");
     for port in &p.open_ports {
         out.push_str(&format!("{}\n", port));
@@ -623,7 +631,7 @@ fn csv_ports(p: &PortsResult) -> String {
     out
 }
 
-fn csv_findings(v: &VulnReport) -> String {
+pub(crate) fn csv_findings(v: &VulnReport) -> String {
     let mut out = String::from("title,description,severity,url\n");
     for f in &v.findings {
         let title = csv_escape(&f.title);
@@ -635,7 +643,7 @@ fn csv_findings(v: &VulnReport) -> String {
     out
 }
 
-fn csv_security(sec: &Vec<SecurityFlag>) -> String {
+pub(crate) fn csv_security(sec: &Vec<SecurityFlag>) -> String {
     let mut out = String::from("level,title,description,url\n");
     for f in sec {
         let lvl = csv_escape(&f.level);
@@ -693,7 +701,7 @@ fn build_xml(r: &CombinedResult) -> String {
     s
 }
 
-fn xesc(s: &str) -> String {
+pub(crate) fn xesc(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
@@ -1300,6 +1308,9 @@ static CHARTS_HTML: &str = r###"<!doctype html>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::extract::{Query, State};
+    use axum::http::{header, StatusCode};
+    use axum::response::IntoResponse;
 
     #[test]
     fn test_csv_escape_no_special_chars() {
@@ -2137,5 +2148,158 @@ mod tests {
         assert!(xml.contains("pages=\"100\""));
         assert!(xml.contains("links=\"200\""));
         assert!(xml.contains("ports_open=\"50\""));
+    }
+
+    // --- New async handler tests: seed AppState with data and verify success paths ---
+
+    async fn seeded_state_for_site_a() -> AppState {
+        let state = AppState::default();
+        let pages = vec![Page {
+            url: "https://example.com".to_string(),
+            status: Some(200),
+            title: Some("Home".to_string()),
+            links: vec![],
+            content_type: Some("text/html; server=nginx".to_string()),
+            bytes: Some(1234),
+            text: Some("This site uses WordPress and React with PHP and jQuery".to_string()),
+            signals: Some(MarketingSignals {
+                json_ld_blocks: 2,
+                json_ld_types: vec!["Organization".to_string()],
+                json_ld_raw: vec![],
+                microdata_items: 1,
+                microdata_types: vec!["Product".to_string()],
+                open_graph_tags: 3,
+                og_props: vec!["og:title".to_string()],
+                twitter_tags: 1,
+                twitter_names: vec!["twitter:card".to_string()],
+                meta_robots: Some("index,follow".to_string()),
+                canonical_url: Some("https://example.com".to_string()),
+                hreflang_count: 2,
+                hreflang_langs: vec!["en".to_string(), "es".to_string()],
+                trackers: vec!["Google Analytics".to_string(), "HubSpot".to_string()],
+            }),
+        }];
+        let crawl = CrawlResult {
+            pages_crawled: 1,
+            links_checked: 1,
+            broken_links: vec![],
+            pages,
+        };
+        let ports = PortsResult { open_ports: vec![80, 443], scanned: 2 };
+        let vuln = VulnReport { findings: vec![Finding { title: "Missing CSP".into(), description: "no csp".into(), severity: "High".into(), url: Some("https://example.com".into()) }] };
+        let sec = vec![SecurityFlag { level: "High".into(), title: "Missing CSP".into(), description: "No CSP header".into(), url: Some("https://example.com".into()) }];
+        let combined = CombinedResult { crawl, ports, vuln, security: sec };
+
+        {
+            let mut inner = state.inner.write().await;
+            inner.last_results = Some(combined);
+            inner.last_report_html = Some("<html>report</html>".to_string());
+        }
+        state
+    }
+
+    #[tokio::test]
+    async fn test_get_marketing_with_data_ok() {
+        let state = seeded_state_for_site_a().await;
+        let resp = get_marketing(State(state), Query(ResultsQuery { site: Some("A".to_string()) }))
+            .await
+            .into_response();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("");
+        assert!(ct.contains("application/json"));
+    }
+
+    #[tokio::test]
+    async fn test_get_techstack_with_data_ok() {
+        let state = seeded_state_for_site_a().await;
+        let resp = get_techstack(State(state), Query(ResultsQuery { site: Some("A".to_string()) }))
+            .await
+            .into_response();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("");
+        assert!(ct.contains("application/json"));
+    }
+
+    #[tokio::test]
+    async fn test_get_pages_with_data_ok() {
+        let state = seeded_state_for_site_a().await;
+        let resp = get_pages(State(state), Query(ResultsQuery { site: Some("A".to_string()) }))
+            .await
+            .into_response();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("");
+        assert!(ct.contains("application/json"));
+    }
+
+    #[tokio::test]
+    async fn test_get_results_json_with_data_ok() {
+        let state = seeded_state_for_site_a().await;
+        let resp = get_results_json(State(state), Query(ResultsQuery { site: Some("A".to_string()) }))
+            .await
+            .into_response();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_export_json_with_data_headers() {
+        let state = seeded_state_for_site_a().await;
+        let resp = export_data(
+            State(state),
+            Query(ExportQuery { format: "json".to_string(), kind: None })
+        ).await.into_response();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("");
+        assert_eq!(ct, "application/json");
+        let cd = resp.headers().get(header::CONTENT_DISPOSITION).and_then(|v| v.to_str().ok()).unwrap_or("");
+        assert!(cd.contains("filename=results.json"));
+    }
+
+    #[tokio::test]
+    async fn test_export_html_with_data_headers() {
+        let state = seeded_state_for_site_a().await;
+        let resp = export_data(
+            State(state),
+            Query(ExportQuery { format: "html".to_string(), kind: None })
+        ).await.into_response();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("");
+        assert!(ct.contains("text/html"));
+    }
+
+    #[tokio::test]
+    async fn test_export_xml_with_data_headers() {
+        let state = seeded_state_for_site_a().await;
+        let resp = export_data(
+            State(state),
+            Query(ExportQuery { format: "xml".to_string(), kind: None })
+        ).await.into_response();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("");
+        assert_eq!(ct, "application/xml");
+    }
+
+    #[tokio::test]
+    async fn test_export_csv_kinds_with_data_headers() {
+        let state = seeded_state_for_site_a().await;
+        for kind in ["pages", "broken_links", "ports", "findings", "security"] {
+            let resp = export_data(
+                State(state.clone()),
+                Query(ExportQuery { format: "csv".to_string(), kind: Some(kind.to_string()) })
+            ).await.into_response();
+            assert_eq!(resp.status(), StatusCode::OK);
+            let ct = resp.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("");
+            assert_eq!(ct, "text/csv");
+            let cd = resp.headers().get(header::CONTENT_DISPOSITION).and_then(|v| v.to_str().ok()).unwrap_or("");
+            assert!(cd.contains("attachment; filename="));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_report_with_data_ok() {
+        let state = seeded_state_for_site_a().await;
+        let resp = get_report(State(state)).await.into_response();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("");
+        assert!(ct.contains("text/html"));
     }
 }

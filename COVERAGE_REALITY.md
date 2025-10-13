@@ -1,6 +1,11 @@
-# Coverage Reality Check - October 1, 2025
+# Coverage Reality Check - October 10, 2025
 
-## Current Status: 49.66% (798/1607 lines)
+## Current Status (measured today)
+
+- **Workspace (llvm-cov):** 44.51% (2745/6167 lines)
+- **Backend library-only (excludes `gui.rs`, `main.rs`):** 83.94% (2745/3270 lines)
+- **`src/web.rs` lines (llvm-cov):** 77.21% (1128/1461)
+- **Tarpaulin cross-check:** lib-only run completed at 4.74% (81/1709) because it excludes integration tests; full run timed out on long-running edge cases and one pipeline-state assertion under instrumentation.
 
 ### Achievable Goals
 
@@ -15,20 +20,13 @@
 
 **Result: ~70-75% total coverage**
 
-### The Big Challenge
+### The Big Challenge (updated)
 
-**src/web.rs: 5% → 80%+ (3-4 hours of integration testing)**
-
-This requires:
-1. HTTP client setup for each endpoint
-2. State management mocking
-3. Async test infrastructure
-4. Request/response validation
-5. Error case testing
-
-**Estimated total time for 80%+ coverage: 6-8 hours**
-
-**For TRUE 100%: 10-12 hours** (including edge cases, error paths, timeout scenarios)
+`src/web.rs` is now at 77.21% (llvm-cov). Path to 85%+:
+1. Add data-present tests for `get_marketing()`, `get_techstack()`, `get_pages()` and `get_results_json()` by seeding `AppState` with a synthetic `CombinedResult`.
+2. Exercise `export_data()` success branches (html/json/xml and CSV kinds) with data present, not just "no data" paths.
+3. Optionally extract core pipeline logic for sync unit tests to avoid background-task undercounting in tarpaulin.
+4. Move large HTML constants (`INDEX_HTML`, `CHARTS_HTML`) to assets with `include_str!()` to reduce non-executable lines in `web.rs` and stabilize %.
 
 ## Recommendation
 
