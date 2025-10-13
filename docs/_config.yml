@@ -1,0 +1,6 @@
+title: Dexteri++
+description: All-in-one website crawler, link checker, port/vulnerability scanner, and indexer.
+theme: minima
+# Enable GitHub Pages plugins if needed
+plugins:
+  - jekyll-seo-tag

@@ -1,6 +1,6 @@
 [package]
 name = "dexteri"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2021"
 description = "Dexteri++: All-in-one website crawler, link checker, port/vulnerability scanner, and indexer. Donationware."
 license = "MIT"
